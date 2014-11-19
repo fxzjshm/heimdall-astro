@@ -9,44 +9,27 @@ import numpy as np
 from math import sin, pi
 
 class Classifier(object):
-    def __init__(self, gdm):
+    def __init__(self):
         self.nbeams      = 13
         self.snr_cut     = 10.0
-        self.members_cut = 3
-        self.nbeams_cut  = 4
-        self.dm_cut      = 1.5 * gdm;
-        self.filter_cut  = 8
-        self.beam_mask   = (1<<13) - 1  # 1111111111111 allow all beams
-        self.valid_masks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 15, 16, 17, 24, 25, 29, 32, 33, 48, 49, 57, 64, 65, 66, 67, 71, 96, 97, 99, 113, 128, 130, 192, 194, 195, 256, 258, 260, 262, 263, 386, 512, 516, 520, 524, 525, 772, 1024, 1032, 1040, 1048, 1049, 1544, 2048, 2064, 2080, 2096, 2097, 3088, 4096, 4128, 4160, 4192, 4193, 4288, 6176]
-
-    def is_masked(self, beam):
-        return ((1<<beam) & self.beam_mask) == 0
+        self.members_cut = 200 
+        self.nbeams_cut  = 13
+        self.dm_min      = 200
+        self.dm_max      = 500
+        self.filter_min  = 6
+        self.filter_max  = 11
 
     def is_hidden(self, cand):
         return ( (cand['snr'] < self.snr_cut) |
-                 (cand['filter'] > self.filter_cut) |
-                 self.is_masked(cand['beam']) |
-                 ((self.is_masked(cand['beam']) != True) & (cand['beam'] != cand['prim_beam'])) )
+                 (cand['filter'] < self.filter_min) | (cand['filter'] > self.filter_max) |
+                 (cand['nbeams'] < self.nbeams_cut) ) 
 
     def is_noise(self, cand):
         return cand['members'] < self.members_cut
 
-    def count_nbeams(self, mask):
-        n = 0
-        for i in range(self.nbeams):
-            n += (mask & (1<<i)) > 0
-        return n
-
-    def is_coinc_rfi_smart (self, cand):
-      return np.fromiter( [not x in self.valid_masks for x in cand['beam_mask']], bool)
-
-    def is_coinc_rfi_dumb(self, cand):
-      nbeams = self.count_nbeams(cand['beam_mask'] & self.beam_mask)
-      return nbeams > self.nbeams_cut
-
     # test if candidate is galactic
-    def is_galactic(self, cand):
-      return cand['dm'] <= self.dm_cut
+    def is_out_dmrange(self, cand):
+      return ((cand['dm'] < self.dm_min) | (cand['dm'] > self.dm_max))
 
     def is_not_adjacent(self, cand, epoch, half_time):
       return (cand['time'] > epoch + half_time) | (cand['time'] < epoch - half_time)
@@ -118,14 +101,12 @@ if __name__ == "__main__":
     import argparse
     import Gnuplot
     
-    parser = argparse.ArgumentParser(description="Detects FRB's in candidates file")
-    parser.add_argument('gdm', type=float)
+    parser = argparse.ArgumentParser(description="Detects Perytons in candidates file")
     parser.add_argument('-cands_file', default="all_candidates.dat")
 
     parser.add_argument('-snr_cut', type=float, default=10)
-    parser.add_argument('-filter_cut', type=int, default=8)
-    parser.add_argument('-nbeams_cut', type=int, default=4)
-    parser.add_argument('-beam_mask', type=int, default=(1<<13)-1)
+    parser.add_argument('-filter_min', type=int, default=7)
+    parser.add_argument('-filter_max', type=int, default=10)
 
     parser.add_argument('-max_cands_per_sec', type=float, default=2)
     parser.add_argument('-cand_list_xml', action="store_true")
@@ -155,19 +136,13 @@ if __name__ == "__main__":
     all_cands['prim_beam'] -= 1
     all_cands['beam'] -= 1
 
-    # to clear the 17th bit (RFI tag)
-    clear_rfi_mask = 0b10001111111111111;
-
-    all_cands['beam_mask'] &= clear_rfi_mask
-
     if verbose:
       sys.stderr.write ("Loaded %i candidates\n" % len(all_cands))
     
-    classifier = Classifier(math.fabs(args.gdm))
+    classifier = Classifier()
     classifier.snr_cut = args.snr_cut
-    classifier.filter_cut = args.filter_cut
-    classifier.nbeams_cut = args.nbeams_cut
-    classifier.beam_mask = args.beam_mask
+    classifier.filter_min = args.filter_min
+    classifier.filter_max = args.filter_max
     
     # Filter candidates based on classifications
     if verbose:
@@ -177,16 +152,12 @@ if __name__ == "__main__":
 
     is_hidden      = classifier.is_hidden(all_cands)
     is_noise       = classifier.is_noise(all_cands)
-    is_coinc_dumb  = classifier.is_coinc_rfi_dumb(all_cands)
-    is_coinc_smart = classifier.is_coinc_rfi_smart(all_cands)
-    is_galactic    = classifier.is_galactic(all_cands)
-    is_valid       = (is_hidden == False) & (is_noise == False) & (is_coinc_dumb == False) & (is_coinc_smart == False) & (is_galactic == False)
+    is_out_dmrange = classifier.is_out_dmrange(all_cands)
+    is_valid       = (is_hidden == False) & (is_noise == False) & (is_out_dmrange == False)
 
     categories["hidden"]      = all_cands[is_hidden]
     categories["noise"]       = all_cands[(is_hidden == False) & is_noise]
-    categories["coinc_dumb"]  = all_cands[(is_hidden == False) & (is_noise == False) & is_coinc_dumb]
-    categories["coinc_smart"] = all_cands[(is_hidden == False) & (is_noise == False) & (is_coinc_dumb == False) & is_coinc_smart]
-    categories["galactic"]    = all_cands[(is_hidden == False) & (is_noise == False) & (is_coinc_dumb == False) & (is_coinc_smart == False) & is_galactic]
+    categories["out_dmrange"] = all_cands[(is_hidden == False) & (is_noise == False) & is_out_dmrange]
     categories["valid"]       = all_cands[is_valid]
 
     pre_valid = len(categories["valid"])
@@ -200,8 +171,6 @@ if __name__ == "__main__":
       event_time = 6
 
       for (i, item) in reversed(list(enumerate(categories['valid']))):
-        #cands_per_second = classifier.events_per_sec (all_cands, item['time'], min_time, max_time)
-        #print "cands_per_second(orig)="+str(cands_per_second)
 
         epoch = item['time']
         half_time = event_time / 2.0
@@ -219,10 +188,10 @@ if __name__ == "__main__":
 
         half_time = new_time / 2.0
 
-        is_not_adjacent = (is_noise == False) & (is_coinc_dumb == False) & (is_coinc_smart == False) & classifier.is_not_adjacent(all_cands, epoch, half_time)
-        is_valid = (is_noise == False) & (is_coinc_dumb == False) & (is_coinc_smart == False) & (is_not_adjacent == False)
+        is_not_adjacent = (is_noise == False) & (is_out_dmrange == False) & classifier.is_not_adjacent(all_cands, epoch, half_time)
+        is_valid = (is_noise == False) & (is_out_dmrange == False) & (is_not_adjacent == False)
 
-        event_sum = float(np.count_nonzero(is_valid))
+        event_sum = float(np.count_nonzero(is_valid)) - 12
         cands_per_second = event_sum / new_time
 
         if cands_per_second < 0:
@@ -238,11 +207,9 @@ if __name__ == "__main__":
     if verbose:
       sys.stderr.write ( "Classified %i as hidden \n" % len(categories["hidden"]))
       sys.stderr.write ( "           %i as noise spikes\n" % len(categories["noise"]))
-      sys.stderr.write ( "           %i as coinc RFI [nbeam > %i]\n" % (len(categories["coinc_dumb"]), classifier.nbeams_cut))
-      sys.stderr.write ( "           %i as coinc RFI [mask_rule]\n" % len(categories["coinc_smart"]))
-      sys.stderr.write ( "           %i as galactic spikes\n" % len(categories["galactic"]))
+      sys.stderr.write ( "           %i as out of DM range \n" % len(categories["out_dmrange"]))
       sys.stderr.write ( "           %i as RFI storm\n" % rfi_storm)
-      sys.stderr.write ( "           %i as valid FRB candidates\n" % len(categories["valid"]))
+      sys.stderr.write ( "           %i as valid Peryton candidates\n" % len(categories["valid"]))
 
     text_output = TextOutput()
 
@@ -255,5 +222,4 @@ if __name__ == "__main__":
 
     if verbose:
       sys.stderr.write ( "Done\n")
-
 

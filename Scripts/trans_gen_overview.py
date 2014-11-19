@@ -10,7 +10,7 @@ class Classifier(object):
         self.nbeams      = 13
         self.snr_cut     = 6.5
         self.members_cut = 3
-        self.nbeams_cut  = 2
+        self.nbeams_cut  = 3
         self.dm_cut      = 1.5
         self.filter_cut  = 10
         self.beam_mask   = (1<<13) - 1
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument('-nbeams', type=int, default=13)
     parser.add_argument('-snr_cut', type=float)
     parser.add_argument('-beam_mask', type=int, default=(1<<13)-1)
-    parser.add_argument('-nbeams_cut', type=int, default=2)
+    parser.add_argument('-nbeams_cut', type=int, default=3)
     parser.add_argument('-members_cut', type=int, default=3)
     parser.add_argument('-dm_cut', type=float, default=1.5)
     parser.add_argument('-filter_cut', type=int, default=99)
@@ -349,6 +349,7 @@ if __name__ == "__main__":
     parser.add_argument('-min_bins', type=int, default=30)
     parser.add_argument('-resolution', default="1024x768")
     parser.add_argument('-std_out', action="store_true")
+    parser.add_argument('-skip_rows', type=int, default=0)
     parser.add_argument('-just_time_dm', action="store_true")
     parser.add_argument('-cand_list_xml', action="store_true")
     parser.add_argument('-max_cands', type=int, default=20)
@@ -361,6 +362,7 @@ if __name__ == "__main__":
     nbeams = args.nbeams
     interactive = args.interactive
     std_out = args.std_out
+    skip_rows = args.skip_rows
     just_time_dm = args.just_time_dm
     verbose = args.verbose
     cand_list_xml = args.cand_list_xml
@@ -385,11 +387,13 @@ if __name__ == "__main__":
                           'formats': ('f4', 'i4', 'f4', 'i4',
                                       'i4', 'f4', 'i4', 'i4', 'i4',
                                       'i4', 'i4', 'i4',
-                                      'f4', 'i4')})
+                                      'f4', 'i4')},
+                   skiprows=skip_rows)
+
     # Adjust for 0-based indexing
     all_cands['prim_beam'] -= 1
     all_cands['beam'] -= 1
-    
+
     if verbose:
       sys.stderr.write ("Loaded %i candidates\n" % len(all_cands))
     
@@ -447,26 +451,41 @@ if __name__ == "__main__":
         sys.stderr.write ( "Generating plots...\n")
       g = Gnuplot.Gnuplot(debug=0)
       if not interactive:
-          g('set terminal pngcairo enhanced font "arial,10" size ' + res_x + ', ' + res_y)
-          if std_out:
-              g('set output')
-              if verbose:
-                sys.stderr.write ( "Writing binary image data to STDOUT\n")
-          else:
-              g('set output "overview_' + resolution + '.tmp.png"')
-              if verbose:
-                sys.stderr.write ( "Writing plots to overview_" + resolution + ".tmp.png\n")
+        g('set terminal pngcairo enhanced font "arial,10" size ' + res_x + ', ' + res_y)
+        if std_out:
+          g('set output')
+          if verbose:
+            sys.stderr.write ( "Writing binary image data to STDOUT\n")
+        else:
+          g('set output "overview_' + resolution + '.tmp.png"')
+          if verbose:
+            sys.stderr.write ( "Writing plots to overview_" + resolution + ".tmp.png\n")
+      else:
+        g('set terminal x11 size '+ res_x + ', ' + res_y)
 
       if just_time_dm:
         timedm_plot = TimeDMPlot(g, False)
         timedm_plot.plot(categories)
       else:
+        # g('set terminal x11 size '+ res_x + ', ' + res_y)
         g('set multiplot')
+        if verbose:
+          sys.stderr.write ( "Gen TimeDM\n")
         timedm_plot = TimeDMPlot(g, True)
+        if verbose:
+          sys.stderr.write ( "Gen DMSNR\n")
         dmsnr_plot  = DMSNRPlot(g)
+        if verbose:
+          sys.stderr.write ( "Gen DMHist\n")
         dmhist_plot = DMHistPlot(g)
+        if verbose:
+          sys.stderr.write ( "Plot TimeDM\n")
         timedm_plot.plot(categories)
+        if verbose:
+          sys.stderr.write ( "Plot DMSNR\n")
         dmsnr_plot.plot(categories)
+        if verbose:
+          sys.stderr.write ( "Plot BeamHists\n")
         dmhist_plot.plot(beam_hists)
         g('unset multiplot')
       

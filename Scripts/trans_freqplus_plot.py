@@ -13,37 +13,46 @@ DL = 0
 
 ###########################################################################
 
-def plotCandDspsr(fil_file, sample, filter, dm):
+def plotCandDspsr(fil_file, sample, filter, dm, snr, nchan=0, nbin=0):
 
   cand_time = (0.000064 * sample)
   cmd = "dmsmear -f 1382 -b 400 -n 1024 -d " + str(dm) + " -q 2>&1 "
   p = os.popen(cmd)
   cand_band_smear = p.readline().strip()
   p.close()
-  Dada.logMsg(1, DL, "plotCandDspsr: cand_band_smear='" + cand_band_smear + "'")
+  Dada.logMsg(2, DL, "plotCandDspsr: cand_band_smear='" + cand_band_smear + "'")
 
   cand_filter_time = (2 ** filter) * 0.000064
 
   cand_smearing = float(cand_band_smear) + float(cand_filter_time)
 
-  cand_start_time = cand_time - (1.0 * cand_smearing)
+  cand_start_time = cand_time - (0.5 * cand_smearing)
 
   cand_tot_time   = 2.0 * cand_smearing
 
+  # determine the bin width, based on heimdalls filter width
+  if nbin == 0:
+    bin_width = 0.000064 * (2 ** filter)
+    nbin = int(cand_tot_time / bin_width)
+
+  if nbin < 16:
+    nbin = 16
+
   cmd = "dspsr " + fil_file + " -S " + str(cand_start_time) + \
-        " -b 128" + \
+        " -b " + str(nbin) + \
         " -T " + str(cand_tot_time) + \
         " -c " + str(cand_tot_time) + \
         " -D " + str(dm) + \
-        " -U 8" + \
+        " -U 1" + \
+        " -cepoch start " + \
         " 2>&1 | grep unloading | awk '{print $NF}'"
 
   # create a temporary working directory
   workdir = tempfile.mkdtemp()
-
+  Dada.logMsg(2, DL, "plotCandDspsr: workdir=" + workdir)
   os.chdir(workdir)
 
-  Dada.logMsg(1, DL, "plotCandDspsr: " + cmd)
+  Dada.logMsg(2, DL, "plotCandDspsr: " + cmd)
   p = os.popen(cmd)
   response = p.readline().strip()
   p.close()
@@ -57,9 +66,22 @@ def plotCandDspsr(fil_file, sample, filter, dm):
 
   binary_data = []
 
+  if nchan == 0:
+    # determine number of channels based on SNR
+    nchan = int(round(math.pow(float(snr)/4.0,2)))
+    if nchan < 2:
+      nchan = 2
+
+  nchan_base2 = int(round(math.log(nchan,2)))
+  nchan = pow(2,nchan_base2)
+
+  if nchan > 512:
+    nchan = 512
+
   title = "DM=" + str(dm) + " Length=" + str(cand_filter_time*1000) + "ms Epoch=" + str(cand_start_time)
-  cmd = "psrplot -c above:l='" + title + "' -j 'zap chan 0-160' -j 'F 128' -c x:unit=ms -p freq+ ./" + archive + " -D -/PNG";
-  Dada.logMsg(1, DL, "plotCandDspsr: " + cmd)
+  cmd = "psrplot -c above:c='' -j 'zap chan 0-160,335-338,181-183' -c x:unit=ms -O -s /home/dada/linux_64/bin/frb.style ./" + archive + " -j 'F "+str(nchan)+"' -D -/PNG"
+
+  Dada.logMsg(2, DL, "plotCandDspsr: " + cmd)
   p = os.popen(cmd)
   binary_data = p.read()
   p.close()
@@ -192,13 +214,14 @@ if __name__ == "__main__":
   import argparse
   import Gnuplot
 
-
   parser = argparse.ArgumentParser(description="Plot a transient event to stdout")
   parser.add_argument("fil_file", help="filterbank file to process")
   parser.add_argument("sample", help="sample number of event start", type=int)
   parser.add_argument("dm", help="dm of event", type=float)
   parser.add_argument("filter", help="filter of event", type=int)
-
+  parser.add_argument("snr", help="snr of event", type=float)
+  parser.add_argument("-nbin", help="number of phase bins to use in plot", type=int, default=0)
+  parser.add_argument("-nchan", help="number of channels to use in plot", type=int, default=0)
   parser.add_argument('-verbose', action="store_true")
   args = parser.parse_args()
 
@@ -206,6 +229,9 @@ if __name__ == "__main__":
   sample = args.sample
   dm = args.dm
   filter = args.filter
+  snr = args.snr
+  nbin= args.nbin
+  nchan = args.nchan
   verbose = args.verbose
 
   if not os.path.exists(fil_file):
@@ -228,7 +254,7 @@ if __name__ == "__main__":
 
     if (proc_type == "dspsr"):
       Dada.logMsg(2, DL, "main: plotCandDspsr()")
-      binary_data = plotCandDspsr(fil_file, sample, filter, dm)
+      binary_data = plotCandDspsr(fil_file, sample, filter, dm, snr, nchan, nbin)
       binary_len = len(binary_data)
       Dada.logMsg(3, DL, "main: sending binary data len="+str(binary_len))
 
