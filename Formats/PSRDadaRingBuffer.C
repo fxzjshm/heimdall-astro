@@ -155,7 +155,8 @@ bool PSRDadaRingBuffer::read_header()
 
   if (ascii_header_get (header, "BEAM", "%d", &beam) < 0)
   {
-    cerr << "PSRDadaRingBuffer::read_header could not extract BEAM from header, assuming 0" << endl;
+    // this would get generated every time since the_decimator does not pass this param 
+    //cerr << "PSRDadaRingBuffer::read_header could not extract BEAM from header, assuming 0" << endl;
 		beam = 0;
   }
 

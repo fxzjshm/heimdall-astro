@@ -681,8 +681,8 @@ hd_error hd_execute(hd_pipeline pl,
   thrust::host_vector<hd_size>  h_group_members;
   thrust::host_vector<hd_float> h_group_dms;
 
-  if (!too_many_giants)
-  {
+  //if (!too_many_giants)
+  //{
     thrust::device_vector<hd_size> d_giant_labels(giant_count);
     hd_size* d_giant_labels_ptr = thrust::raw_pointer_cast(&d_giant_labels[0]);
   
@@ -758,7 +758,7 @@ hd_error hd_execute(hd_pipeline pl,
     h_group_members = d_group_members;
     h_group_dms = d_group_dms;
     //h_group_flags = d_group_flags;
-  }
+  //}
   
   if( pl->params.verbosity >= 2 ) {
     cout << "Writing output candidates, utc_start=" << pl->params.utc_start << endl;

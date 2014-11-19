@@ -161,7 +161,7 @@ class FreqTimePlot(object):
         # TODO: Work out equation for DM curve in pixel coords
         self.g('plot "' + data + '" matrix with image notitle, g(x) w l notitle lw 2 lc 2 axes x2y2')
 
-def plotCandDspsr(fil_file, utc_start, sample, filter, dm):
+def plotCandDspsr(fil_file, utc_start, sample, filter, dm, snr, nbin, nchan):
 
   Dada.logMsg(1, DL, "plotCandDspsr: utc_start =" + utc_start)
   ddd_time = convertTime(utc_start)
@@ -187,15 +187,21 @@ def plotCandDspsr(fil_file, utc_start, sample, filter, dm):
 
   Dada.logMsg(1, DL, "plotCandDspsr cand_smearing=" + str(cand_smearing * 1000) + " ms")
 
-  cand_start_time = cand_time
-  cand_tot_time   = cand_smearing
+  cand_start_time = cand_time - (0.5 * cand_smearing)
+  cand_tot_time   = cand_smearing * 2
+
+  # determine the bin width, based on heimdalls filter width
+  if nbin == 0:
+    bin_width = 0.000064 * (2 ** (filter-1))
+    nbin = int(cand_tot_time / bin_width)
 
   cmd = "dspsr " + fil_file + " -S " + str(cand_start_time) + \
-        " -b 512 " + \
+        " -b " + str(nbin) + \
         " -T " + str(cand_tot_time) + \
         " -c " + str(cand_tot_time) + \
         " -D " + str(dm) + \
-        " -U 8" + \
+        " -U 1" + \
+        " -cepoch start" + \
         " 2>&1 | grep unloading | awk '{print $NF}'"
 
   # create a temporary working directory
@@ -215,9 +221,27 @@ def plotCandDspsr(fil_file, utc_start, sample, filter, dm):
     time.sleep(1)
     count = count - 1
 
+  if nchan == 0:
+    # determine number of channels based on SNR
+    nchan = int(round(math.pow(float(snr)/4.0,2)))
+    if nchan < 2:
+      nchan = 2
+
+  nchan_base2 = int(round(math.log(nchan,2)))
+  nchan = pow(2,nchan_base2)
+
+  if nchan > 512:
+    nchan = 512
+    
+  Dada.logMsg(1, DL, "plotCandDspsr: snr="+str(snr)+" nchan="+str(nchan))
+
   binary_data = []
+
+  title = "DM=" + str(dm) + " Length=" + str(cand_filter_time*1000) + "ms Epoch=" + str(cand_start_time)
+
   # cmd = "psrplot -j 'zap chan 0-160' -c y:win=1525:1182 -p freq ./" + archive + " -D -/PNG";
-  cmd = "psrplot -J /home/dada/linux_64/bin/zap.psh -j 'zap chan 0-160,335-338' -c x:unit=ms -p freq+ ./" + archive + " -j 'F 128' -D -/PNG";
+  # cmd = "psrplot -J /home/dada/linux_64/bin/zap.psh -j 'zap chan 0-160,335-338' -c x:unit=ms -p freq+ ./" + archive + " -jD -j 'F "+str(nchan)+"' -D -/PNG"
+  cmd = "psrplot -j 'zap chan 0-160,335-338' -O -s /home/dada/linux_64/bin/frb.style ./" + archive + " -j 'F "+str(nchan)+"' -D -/PNG -c above:c='' -c x:unit=ms"
   Dada.logMsg(1, DL, "plotCandDspsr: " + cmd)
   p = os.popen(cmd)
   binary_data = p.read()
@@ -403,6 +427,9 @@ try:
     did_read, did_write, did_error = select.select(can_read, can_write, can_error, timeout)
     Dada.logMsg(3, DL, "main: read="+str(len(did_read))+" write="+str(len(did_write))+" error="+str(len(did_error)))  
 
+    nchan = 0
+    nbin = 0
+
     # if we did_read
     if (len(did_read) > 0):
       for handle in did_read:
@@ -443,13 +470,19 @@ try:
                 filter = int(val)
               elif key == "dm":
                 dm = float(val)
+              elif key == "nchan":
+                nchan = float(val)
+              elif key == "nbin":
+                nbin = float(val)
               elif key == "proc_type":
                 proc_type = val
+              elif key == "snr":
+                snr = val
               else:
                 Dada.logMsg(1, DL, "main: unrecognized key/val pair: " + part)
 
             # find the .fil file
-            cmd = "ls -1 " + FILTERBANK_DIR + "/*/" + utc_start + "/" + beam + "/" + utc_start + ".fil "
+            cmd = "ls -1 " + FILTERBANK_DIR + "/*/" + utc_start + "/" + beam + "/" + utc_start + ".fil /nfs/raid0/bpsr/upload/*/" + utc_start + "/" + beam + "/" + utc_start + ".fil"
             Dada.logMsg(3, DL, "main: " + cmd)
 
             p = os.popen(cmd)
@@ -473,7 +506,7 @@ try:
 
               if (proc_type == "dspsr"):
                 Dada.logMsg(2, DL, "main: plotCandDspsr()")
-                binary_data = plotCandDspsr(fil_file, utc_start, sample, filter, dm)
+                binary_data = plotCandDspsr(fil_file, utc_start, sample, filter, dm, snr, nbin, nchan)
                 binary_len = len(binary_data)
                 Dada.logMsg(3, DL, "main: sending binary data len="+str(binary_len))
                 handle.send(binary_data)
