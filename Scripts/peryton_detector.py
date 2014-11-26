@@ -70,7 +70,7 @@ class TextOutput(object):
           # get indicies list for sorting via time
           sorted_indices = [i[0] for i in sorted(enumerate(data[cand_type]['time']), key=lambda x:x[1])]
 
-          #sys.stdout.write ( "SNR\tTIME\tSAMP\tDM\tFILTER\tBEAM\n")
+          sys.stdout.write ( "SNR\tTIME [s]\tSAMP\tDM\tFILTER\tPRI BEAM\n")
           for i in sorted_indices:
                 sys.stdout.write (str(data[cand_type]['snr'][i]) + "\t" + \
                                   str(data[cand_type]['time'][i]) + "\t" + \
@@ -195,8 +195,9 @@ if __name__ == "__main__":
         cands_per_second = event_sum / new_time
 
         if cands_per_second < 0:
-          sys.stderr.write ( "cands_per_second = %f \n" % ( cands_per_second )) 
-          cands_per_second = max_cands_per_second
+          cands_per_second = 0
+          if verbose:
+            sys.stderr.write ( "cands_per_second = %f \n" % ( cands_per_second )) 
         if verbose:
           sys.stderr.write ( "cands_per_second around %f was %f [max = %f]\n" % ( item['time'], cands_per_second, max_cands_per_second )) 
         if cands_per_second >= max_cands_per_second:
