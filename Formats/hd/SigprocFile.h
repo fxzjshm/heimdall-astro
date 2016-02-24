@@ -24,5 +24,8 @@ class SigprocFile: public DataSource
 
     std::ifstream m_file_stream;
     int           m_error;
+    bool          first_time;
+    float         offset;
+    float         scale;
 
 };

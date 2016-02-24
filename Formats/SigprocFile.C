@@ -6,6 +6,7 @@
  ***************************************************************************/
 
 #include <iostream>
+#include <float.h>
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -47,7 +48,9 @@ SigprocFile::SigprocFile (const char* filename)
   strftime (buffer, buffer_size, HD_TIMESTR, localtime (&utc_start));
 
   stride = (nchan * nbit) / (8 * sizeof(char));
-
+  first_time = true;
+  offset = 0;
+  scale = 1;
 }
 
 SigprocFile::~SigprocFile()
@@ -62,6 +65,39 @@ size_t SigprocFile::get_data(size_t nsamps, char* data)
   }
   size_t nchan_bytes = stride;
   m_file_stream.read((char*)&data[0], nsamps * nchan_bytes);
+  // by default sigproc 32-bit data are stored as floats, dedisp requires unsigned ints
+  if (nbit == 32)
+  {
+    const unsigned nfloats = nsamps * nchan;
+    unsigned * out = (unsigned *) &data[0];
+    float * in = (float *) &data[0];
+
+    if (first_time)
+    {
+      float sum = 0;
+      float min_float = FLT_MAX;
+      float max_float = -FLT_MAX;
+      for (unsigned i=0; i<nfloats; i++)
+      {
+        if (in[i] < min_float)
+          min_float = in[i];
+        if (in[i] > max_float)
+          max_float = in[i];
+        sum += in[i];
+      }
+      float mean = sum / nfloats;
+
+      offset = 2147483648 - mean;
+      float range = std::max (max_float - mean, mean - min_float);
+      scale = (range - mean) / 536870912;
+      first_time = false;
+    }
+
+    for (unsigned i=0; i<nfloats; i++)
+    {
+      out[i] = (unsigned int) ((in[i] / scale) + offset);
+    }
+  }
   size_t bytes_read = m_file_stream.gcount();
   return bytes_read / nchan_bytes;
 };
