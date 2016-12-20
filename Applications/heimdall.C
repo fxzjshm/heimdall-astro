@@ -81,7 +81,7 @@ int main(int argc, char* argv[])
   {
 #endif
     // Read from filterbank file
-    data_source = new SigprocFile(params.sigproc_file);
+    data_source = new SigprocFile(params.sigproc_file, params.fswap);
     if( !data_source || data_source->get_error() ) {
       cerr << "ERROR: Failed to open data file" << endl;
       return -1;
@@ -140,7 +140,8 @@ int main(int argc, char* argv[])
   size_t total_nsamps = 0;
   size_t nsamps_read = data_source->get_data (nsamps_gulp, (char*)&filterbank[0]);
   size_t overlap = 0;
-  while( nsamps_read && !stop_requested ) {
+  while( nsamps_read && !stop_requested )
+  {
     
     if ( params.verbosity >= 1 ) {
       cout << "Executing pipeline on new gulp of " << nsamps_read
@@ -169,6 +170,9 @@ int main(int argc, char* argv[])
       return -1;
     }
 
+    if (params.verbosity >= 1)
+      cout << "Main: nsamps_processed=" << nsamps_processed << endl;
+
     //pipeline_timer.stop();
     //cout << "pipeline time: " << pipeline_timer.getTime() << " of " << (nsamps_read+overlap) * tsamp << endl;
     //pipeline_timer.reset();
@@ -186,9 +190,40 @@ int main(int argc, char* argv[])
     // at the end of data, never execute the pipeline
     if (nsamps_read < nsamps_gulp - overlap)
       stop_requested = 1;
-
   }
-    
+ 
+  // final iteration for nsamps which is not a multiple of gulp size - overlap
+  if (stop_requested) 
+  {
+    if (params.verbosity >= 1)
+      cout << "Final sub gulp: nsamps_read=" << nsamps_read << " nsamps_gulp=" << nsamps_gulp << " overlap=" << overlap << endl;
+    hd_size nsamps_processed;
+    hd_size nsamps_to_process = nsamps_read + (overlap * 2 - params.boxcar_max);
+    if (nsamps_to_process > nsamps_gulp)
+      nsamps_to_process = nsamps_gulp;
+    error = hd_execute(pipeline, &filterbank[0], nsamps_to_process, nbits, 
+                       total_nsamps, &nsamps_processed);
+    if (params.verbosity >= 1)
+      cout << "Final sub gulp: nsamps_processed=" << nsamps_processed << endl;
+
+    if (error == HD_NO_ERROR)
+    { 
+      if (params.verbosity >= 1)
+        cout << "Processed " << nsamps_processed << " samples." << endl;
+    }
+    else if (error == HD_TOO_MANY_EVENTS)
+    { 
+      if (params.verbosity >= 1)
+        cerr << "WARNING: hd_execute produces too many events, some data skipped" << endl;
+    }
+    else
+    {
+      cerr << "ERROR: Pipeline execution failed" << endl;
+      cerr << "       " << hd_get_error_string(error) << endl;
+    }
+    total_nsamps += nsamps_processed;
+  }
+   
   if( params.verbosity >= 1 ) {
     cout << "Successfully processed a total of " << total_nsamps
          << " samples." << endl;

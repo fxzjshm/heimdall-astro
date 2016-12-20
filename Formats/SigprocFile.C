@@ -7,6 +7,8 @@
 
 #include <iostream>
 #include <float.h>
+#include <stdexcept>
+
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -14,10 +16,11 @@ using std::endl;
 #include "hd/header.h"
 #include "hd/SigprocFile.h"
 
-SigprocFile::SigprocFile (const char* filename)
+SigprocFile::SigprocFile (const char* filename, bool _fswap)
   : m_file_stream(filename, std::ios::binary), DataSource ()
 {
   m_error = 0;
+  fswap = _fswap;
 
   if ( m_file_stream.fail() )
   {
@@ -65,6 +68,7 @@ size_t SigprocFile::get_data(size_t nsamps, char* data)
   }
   size_t nchan_bytes = stride;
   m_file_stream.read((char*)&data[0], nsamps * nchan_bytes);
+
   // by default sigproc 32-bit data are stored as floats, dedisp requires unsigned ints
   if (nbit == 32)
   {
@@ -98,7 +102,43 @@ size_t SigprocFile::get_data(size_t nsamps, char* data)
       out[i] = (unsigned int) ((in[i] / scale) + offset);
     }
   }
+
+  if (fswap)
+  {
+    if (nbit == 2 || nbit == 4 || nbit == 8)
+    {
+      unsigned samps_per_char = 8 / nbit;
+      char * inptr = data;
+      unsigned nchar_per_sample = nchan/samps_per_char;
+      for (unsigned i=0; i<nsamps; i++)
+      {
+        for (unsigned idat=0; idat<(nchar_per_sample/2); idat++)
+        {
+          unsigned odat = nchar_per_sample - (1+idat);
+          unsigned char this_dat = inptr[idat];
+          unsigned char that_dat = inptr[odat];
+    
+          if (nbit == 2)
+          {
+            this_dat = flip_2bit (this_dat);
+            that_dat = flip_2bit (that_dat);
+          }
+          if (nbit == 4)
+          {
+            this_dat = flip_4bit (this_dat);
+            that_dat = flip_4bit (that_dat);
+          }
+
+          inptr[odat] = this_dat;
+          inptr[idat] = that_dat;
+        }
+        inptr += nchar_per_sample;
+      }
+    }
+    else
+      throw std::runtime_error( "Could not FSWAP on the input bitrate" );
+  }
+
   size_t bytes_read = m_file_stream.gcount();
   return bytes_read / nchan_bytes;
 };
-

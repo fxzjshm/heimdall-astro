@@ -62,6 +62,9 @@ struct hd_params {
   // coincidencer socket mode
   const char * coincidencer_host;   // host for coincidence reporting
   int          coincidencer_port;   // port for coincidence reporting
+
+  // swap channel ordering for negative DM searching
+  bool fswap;
  
   // channel zapping
   unsigned int num_channel_zaps;
