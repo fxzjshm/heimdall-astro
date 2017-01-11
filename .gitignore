@@ -10,6 +10,7 @@ Applications/heimdall
 Applications/coincidencer
 Applications/coincidencer_client
 Applications/candidate_profiler
+Applications/generate_dmlist
 Applications/Makefile
 Applications/fil2pgm
 Formats/Makefile
