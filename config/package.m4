@@ -139,7 +139,7 @@ AC_DEFUN([SWIN_PACKAGE_TRY_LINK],
   if test x"$swin_[$1]_include_dir" != x; then
     swin_base=`dirname $swin_[$1]_include_dir`
     if test -d $swin_base/lib; then
-      swin_search_path="$swin_search_path $swin_base/lib"
+      swin_search_path="$swin_search_path $swin_base/lib $swin_base/lib64"
     fi
   fi
 
