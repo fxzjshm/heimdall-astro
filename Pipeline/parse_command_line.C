@@ -128,6 +128,9 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
       params->coincidencer_host = strdup(host.c_str());
       params->coincidencer_port = atoi(port.c_str());
     }
+    else if ( argv[i] == string("-fswap") ) {
+      params->fswap = true;
+    }
     else if( argv[i] == string("-zap_chans") ) {
       unsigned int izap = params->num_channel_zaps;
       params->num_channel_zaps++;
@@ -156,7 +159,6 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
 
 void hd_print_usage()
 {
-
   hd_params p;
   hd_set_default_params(&p);
 
@@ -171,6 +173,7 @@ void hd_print_usage()
   cout << "    -beam ##                 over-ride beam number" << endl;
   cout << "    -output_dir path         create all output files in specified path" << endl;
   cout << "    -dm min max              min and max DM" << endl;
+  cout << "    -dm_tol num              SNR loss tolerance between each DM trial [1.25]" << endl;
   cout << "    -coincidencer host:port  connect to the coincidencer on the specified host and port" << endl;
   cout << "    -zap_chans start end     zap all channels between start and end channels inclusive" << endl;
   cout << "    -max_giant_rate nevents  limit the maximum number of individual detections per minute to nevents" << endl;
@@ -181,5 +184,6 @@ void hd_print_usage()
   cout << "    -rfi_tol num             TBA" << endl;
   cout << "    -rfi_min_beams num       TBA" << endl;
   cout << "    -boxcar_max num          TBA" << endl;
+  cout << "    -fswap                   Swap channel ordering for negative DM - SIGPROC 2,4 or 8 bit only" << endl;
   cout << "    -min_tscrunch_width num  vary between high quality (large value) and high performance (low value)" << endl;
 }
