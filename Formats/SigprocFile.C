@@ -13,6 +13,8 @@ using std::endl;
 #include "hd/header.h"
 #include "hd/SigprocFile.h"
 
+//#define _DEBUG
+
 SigprocFile::SigprocFile (const char* filename)
   : m_file_stream(filename, std::ios::binary), DataSource ()
 {
@@ -47,6 +49,16 @@ SigprocFile::SigprocFile (const char* filename)
   strftime (buffer, buffer_size, HD_TIMESTR, localtime (&utc_start));
 
   stride = (nchan * nbit) / (8 * sizeof(char));
+
+#ifdef _DEBUG
+  std::cerr << "SigprocFile::SigprocFile nchan=" << nchan << std::endl;
+  std::cerr << "SigprocFile::SigprocFile nbit=" << nbit << std::endl;
+  std::cerr << "SigprocFile::SigprocFile beam=" << beam << std::endl;
+  std::cerr << "SigprocFile::SigprocFile tsamp=" << tsamp << std::endl;
+  std::cerr << "SigprocFile::SigprocFile spectra_rate=" << spectra_rate << std::endl;
+  std::cerr << "SigprocFile::SigprocFile f0=" << f0 << std::endl;
+  std::cerr << "SigprocFile::SigprocFile df=" << df << std::endl;
+#endif
 
 }
 
