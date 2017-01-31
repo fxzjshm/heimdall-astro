@@ -18,7 +18,7 @@ AC_DEFUN([SWIN_LIB_DEDISP],
     SWIN_PACKAGE_FIND([dedisp],[libdedisp.*])
     SWIN_PACKAGE_TRY_LINK([dedisp],[#include <dedisp.h>],
                           [dedisp_get_error_string (DEDISP_NO_ERROR);],
-                          [-ldedisp])
+                          [-ldedisp -lstdc++])
   fi
 
   AC_MSG_RESULT([$have_dedisp])
