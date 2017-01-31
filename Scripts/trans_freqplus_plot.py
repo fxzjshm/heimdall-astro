@@ -13,7 +13,7 @@ DL = 0
 
 ###########################################################################
 
-def plotCandDspsr(fil_file, sample, filter, dm, snr, nchan=0, nbin=0):
+def plotCandDspsr(fil_file, sample, filter, dm, snr, nchan=0, nbin=0, length=0):
 
   cand_time = (0.000064 * sample)
   cmd = "dmsmear -f 1382 -b 400 -n 1024 -d " + str(dm) + " -q 2>&1 "
@@ -30,6 +30,9 @@ def plotCandDspsr(fil_file, sample, filter, dm, snr, nchan=0, nbin=0):
 
   cand_tot_time   = 2.0 * cand_smearing
 
+  if length != 0:
+    cand_tot_time = length
+
   # determine the bin width, based on heimdalls filter width
   if nbin == 0:
     bin_width = 0.000064 * (2 ** filter)
@@ -37,6 +40,9 @@ def plotCandDspsr(fil_file, sample, filter, dm, snr, nchan=0, nbin=0):
 
   if nbin < 16:
     nbin = 16
+
+  if nbin > 1024:
+    nbin = 1024
 
   cmd = "dspsr " + fil_file + " -S " + str(cand_start_time) + \
         " -b " + str(nbin) + \
@@ -222,6 +228,7 @@ if __name__ == "__main__":
   parser.add_argument("snr", help="snr of event", type=float)
   parser.add_argument("-nbin", help="number of phase bins to use in plot", type=int, default=0)
   parser.add_argument("-nchan", help="number of channels to use in plot", type=int, default=0)
+  parser.add_argument("-length", help="length of time in plot [default auto-calc]", type=int, default=0)
   parser.add_argument('-verbose', action="store_true")
   args = parser.parse_args()
 
@@ -232,6 +239,7 @@ if __name__ == "__main__":
   snr = args.snr
   nbin= args.nbin
   nchan = args.nchan
+  length = args.length
   verbose = args.verbose
 
   if not os.path.exists(fil_file):
@@ -254,7 +262,7 @@ if __name__ == "__main__":
 
     if (proc_type == "dspsr"):
       Dada.logMsg(2, DL, "main: plotCandDspsr()")
-      binary_data = plotCandDspsr(fil_file, sample, filter, dm, snr, nchan, nbin)
+      binary_data = plotCandDspsr(fil_file, sample, filter, dm, snr, nchan, nbin, length)
       binary_len = len(binary_data)
       Dada.logMsg(3, DL, "main: sending binary data len="+str(binary_len))
 
