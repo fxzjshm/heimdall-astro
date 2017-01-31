@@ -13,7 +13,7 @@ import Dada, Bpsr, threading, sys, time, socket, select, signal, traceback
 import time, numpy, math, os, fnmatch, tempfile, Gnuplot, datetime
 import trans_paths
 
-DM_LIST  = trans_paths.getConfigDir() + '/dm2000.list'
+DM_LIST  = trans_paths.getConfigDir() + '/dm4000_tol1.2.list'
 PIDFILE  = "trans_cand_server.pid"
 LOGFILE  = "trans_cand_server.log"
 QUITFILE = "trans_cand_server.quit"
@@ -161,7 +161,7 @@ class FreqTimePlot(object):
         # TODO: Work out equation for DM curve in pixel coords
         self.g('plot "' + data + '" matrix with image notitle, g(x) w l notitle lw 2 lc 2 axes x2y2')
 
-def plotCandDspsr(fil_file, utc_start, sample, filter, dm, snr, nbin, nchan):
+def plotCandDspsr(fil_file, utc_start, sample, filter, dm, snr, nbin, nchan, length):
 
   Dada.logMsg(1, DL, "plotCandDspsr: utc_start =" + utc_start)
   ddd_time = convertTime(utc_start)
@@ -190,10 +190,19 @@ def plotCandDspsr(fil_file, utc_start, sample, filter, dm, snr, nbin, nchan):
   cand_start_time = cand_time - (0.5 * cand_smearing)
   cand_tot_time   = cand_smearing * 2
 
+  if length != 0:
+    cand_tot_time = length
+
   # determine the bin width, based on heimdalls filter width
   if nbin == 0:
     bin_width = 0.000064 * (2 ** (filter-1))
     nbin = int(cand_tot_time / bin_width)
+
+  if nbin < 16:
+    nbin = 16
+
+  if nbin > 1024:
+    nbin = 1024
 
   cmd = "dspsr " + fil_file + " -S " + str(cand_start_time) + \
         " -b " + str(nbin) + \
@@ -474,6 +483,8 @@ try:
                 nchan = float(val)
               elif key == "nbin":
                 nbin = float(val)
+              elif key == "length":
+                length = float(val)
               elif key == "proc_type":
                 proc_type = val
               elif key == "snr":
@@ -506,7 +517,7 @@ try:
 
               if (proc_type == "dspsr"):
                 Dada.logMsg(2, DL, "main: plotCandDspsr()")
-                binary_data = plotCandDspsr(fil_file, utc_start, sample, filter, dm, snr, nbin, nchan)
+                binary_data = plotCandDspsr(fil_file, utc_start, sample, filter, dm, snr, nbin, nchan, length)
                 binary_len = len(binary_data)
                 Dada.logMsg(3, DL, "main: sending binary data len="+str(binary_len))
                 handle.send(binary_data)
