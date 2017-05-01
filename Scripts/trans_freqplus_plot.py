@@ -5,7 +5,7 @@
 #  * listen on socket
 #  * return plots as binary data over socket 
 
-import Dada, Bpsr, threading, sys, time, socket, select, signal, traceback
+import Dada, threading, sys, time, socket, select, signal, traceback
 import time, numpy, math, os, fnmatch, tempfile, Gnuplot, datetime
 import trans_paths
 
@@ -79,7 +79,7 @@ def plotCandDspsr(fil_file, sample, filter, dm, snr, nchan=0, nbin=0):
     nchan = 512
 
   title = "DM=" + str(dm) + " Length=" + str(cand_filter_time*1000) + "ms Epoch=" + str(cand_start_time)
-  cmd = "psrplot -c above:c='' -j 'zap chan 0-160,335-338,181-183' -c x:unit=ms -O -s /home/dada/linux_64/bin/frb.style ./" + archive + " -j 'F "+str(nchan)+"' -D -/PNG"
+  cmd = "psrplot -c above:c='' -j 'zap chan 0-160,335-338,181-183' -c x:unit=ms -O -s " + trans_paths.getBinaryDir() + "/frb.style ./" + archive + " -j 'F "+str(nchan)+"' -D -/PNG"
 
   Dada.logMsg(2, DL, "plotCandDspsr: " + cmd)
   p = os.popen(cmd)
