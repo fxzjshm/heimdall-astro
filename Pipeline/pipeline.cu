@@ -41,7 +41,7 @@ using thrust::device_vector;
 #include "hd/ClientSocket.h"
 #include "hd/SocketException.h"
 #include "hd/stopwatch.h"         // For benchmarking
-//#include "write_time_series.h" // For debugging
+//#include "hd/write_time_series.h" // For debugging
 
 #include <dedisp.h>
 
@@ -121,7 +121,7 @@ unsigned int get_filter_index(unsigned int filter_width) {
   // This function finds log2 of the 32-bit power-of-two number v
   unsigned int v = filter_width;
   static const unsigned int b[] = {0xAAAAAAAA, 0xCCCCCCCC, 0xF0F0F0F0, 
-                                   0xFF00FF01, 0xFFFF0000};
+                                   0xFF00FF00, 0xFFFF0000};
   register unsigned int r = (v & b[0]) != 0;
   for( int i=4; i>0; --i) {
     r |= ((v & b[i]) != 0) << i;
@@ -547,7 +547,7 @@ hd_error hd_execute(hd_pipeline pl,
       hd_size filter_idx = get_filter_index(filter_width);
       
       if( pl->params.verbosity >= 4 ) {
-        cout << "Filtering each beam at width of " << filter_width << endl;
+        cout << "Filtering each beam at width of " << filter_width << " filter_idx=" << filter_idx << endl;
       }
       
       // Note: Filter width is relative to the current time resolution
@@ -559,7 +559,7 @@ hd_error hd_execute(hd_pipeline pl,
                                             hd_size(1));
       // Filter width relative to cur_dm_scrunch AND tscrunch
       hd_size rel_rel_filter_width = rel_filter_width / rel_tscrunch_width;
-      
+
       start_timer(filter_timer);
       
       error = matched_filter_plan.exec(filtered_series,
@@ -613,6 +613,10 @@ hd_error hd_execute(hd_pipeline pl,
       }
       
       start_timer(giants_timer);
+
+      if( pl->params.verbosity >= 4 ) {
+        cerr << "pl->params.cand_sep_time=" << pl->params.cand_sep_time << " rel_rel_filter_width=" << rel_rel_filter_width << endl;
+      }
       
       error = giant_finder.exec(filtered_series, cur_nsamps_filtered,
                                 pl->params.detect_thresh,
