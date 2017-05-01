@@ -180,7 +180,9 @@ bool PSRDadaRingBuffer::read_header()
   cerr << "PSRDadaRingBuffer::read_header utc_start_str=" << utc_start_str << endl;
   cerr << "PSRDadaRingBuffer::read_header utc_start=" << utc_start << endl;
   cerr << "PSRDadaRingBuffer::read_header tsamp=" << tsamp << endl;
-  cerr << "PSRDadaRingBuffer::read_header spectra_rate =" << spectra_rate << endl;
+  cerr << "PSRDadaRingBuffer::read_header spectra_rate=" << spectra_rate << endl;
+  cerr << "PSRDadaRingBuffer::read_header f0=" << f0 << endl;
+  cerr << "PSRDadaRingBuffer::read_header df=" << df << endl;
 #endif
 
   if (dada_error)

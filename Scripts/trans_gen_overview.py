@@ -3,7 +3,7 @@
 import sys
 import numpy as np
 
-MAX_DM = 2000
+MAX_DM = 4000
 
 class Classifier(object):
     def __init__(self):
