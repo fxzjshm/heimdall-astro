@@ -53,7 +53,7 @@ class TextOutput(object):
             sys.stdout.write("<tr><th align=left>SNR</th><th align=left>Time</th><th align=left>DM</th><th align=left>Filter [ms]</th><th align=left>Beam</th></tr>\n")
             for (i, item) in enumerate(data['valid']['snr']):
                 sys.stdout.write ("<tr>" + \
-                                  "<td>" + str(data['valid']['snr'][i]) + "</td>" + \
+                                  "<td>" + str(data['valid']['max_snr'][i]) + "</td>" + \
                                   "<td>" + str(data['valid']['time'][i]) + "</td>" + \
                                   "<td>" + str(data['valid']['dm'][i]) + "</td>" + \
                                   "<td>" + str(0.064 * (2 **data['valid']['filter'][i])) + "</td>" + \
@@ -70,9 +70,9 @@ class TextOutput(object):
           # get indicies list for sorting via time
           sorted_indices = [i[0] for i in sorted(enumerate(data[cand_type]['time']), key=lambda x:x[1])]
 
-          sys.stdout.write ( "SNR\tTIME [s]\tSAMP\tDM\tFILTER\tPRI BEAM\n")
+          sys.stdout.write ( "SNR\tTIME\tSAMP\tDM\tFILTER\tPRI_BEAM\n")
           for i in sorted_indices:
-                sys.stdout.write (str(data[cand_type]['snr'][i]) + "\t" + \
+                sys.stdout.write (str(data[cand_type]['max_snr'][i]) + "\t" + \
                                   str(data[cand_type]['time'][i]) + "\t" + \
                                   str(data[cand_type]['samp_idx'][i]) + "\t" + \
                                   str(data[cand_type]['dm'][i]) + "\t" + \
@@ -82,12 +82,12 @@ class TextOutput(object):
 
     def print_xml(self, data):
         # get indicie list for sorting via snr
-        snr_sorted_indices = [i[0] for i in sorted(enumerate(data['valid']['snr']), key=lambda x:x[1],reverse=True)]
+        snr_sorted_indices = [i[0] for i in sorted(enumerate(data['valid']['max_snr']), key=lambda x:x[1],reverse=True)]
 
         cand_i = 0
         for i in snr_sorted_indices:
             cand_i += 1
-            sys.stdout.write ("<candidate snr='" + str(data['valid']['snr'][i]) + \
+            sys.stdout.write ("<candidate snr='" + str(data['valid']['max_snr'][i]) + \
                                        "' time='" + str(data['valid']['time'][i]) + \
                                        "' dm='" + str(data['valid']['dm'][i]) + \
                                        "' samp_idx='" + str(data['valid']['samp_idx'][i]) + \
