@@ -91,9 +91,8 @@ size_t SigprocFile::get_data(size_t nsamps, char* data)
       }
       float mean = sum / nfloats;
 
-      offset = 2147483648 - mean;
-      float range = std::max (max_float - mean, mean - min_float);
-      scale = (range - mean) / 536870912;
+      offset = (2 ^ 31) - mean;
+      scale = (max_float - min_float) / (2 ^ 28);
       first_time = false;
     }
 
