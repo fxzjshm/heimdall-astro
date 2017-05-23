@@ -50,7 +50,7 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
       params->sigproc_file = strdup(argv[++i]);
     }
     else if( argv[i] == string("-yield_cpu") ) {
-      params->yield_cpu = atoi(argv[++i]);
+      params->yield_cpu = true;
     }
     else if( argv[i] == string("-nsamps_gulp") ) {
       params->nsamps_gulp = atoi(argv[++i]);
@@ -74,8 +74,8 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
     else if( argv[i] == string("-gpu_id") ) {
       params->gpu_id = atoi(argv[++i]);
     }
-    else if( argv[i] == string("-scrunching") ) {
-      params->use_scrunching = atoi(argv[++i]);
+    else if( argv[i] == string("-no_scrunching") ) {
+      params->use_scrunching = false;
     }
     else if( argv[i] == string("-scrunch_tol") ) {
       params->scrunch_tol = atof(argv[++i]);
@@ -166,24 +166,23 @@ void hd_print_usage()
   cout << "    -k  key                  use PSRDADA hexidecimal key" << endl;
   cout << "    -f  filename             process specified SIGPROC filterbank file" << endl;
   cout << "    -vVgG                    increase verbosity level" << endl;
-  cout << "    -yield_cpu               TBA" << endl;
+  cout << "    -yield_cpu               yield CPU during GPU operations" << endl;
   cout << "    -gpu_id ID               run on specified GPU" << endl;
   cout << "    -nsamps_gulp num         number of samples to be read at a time [" << p.nsamps_gulp << "]" << endl;
-  cout << "    -baseline_length num     TBA" << endl;
+  cout << "    -baseline_length num     rebaselining length [" << p.baseline_length << "]" << endl;
   cout << "    -beam ##                 over-ride beam number" << endl;
   cout << "    -output_dir path         create all output files in specified path" << endl;
   cout << "    -dm min max              min and max DM" << endl;
-  cout << "    -dm_tol num              SNR loss tolerance between each DM trial [1.25]" << endl;
+  cout << "    -dm_tol num              SNR loss tolerance between each DM trial [" << p.dm_tol << "]" << endl;
   cout << "    -coincidencer host:port  connect to the coincidencer on the specified host and port" << endl;
   cout << "    -zap_chans start end     zap all channels between start and end channels inclusive" << endl;
   cout << "    -max_giant_rate nevents  limit the maximum number of individual detections per minute to nevents" << endl;
-  cout << "    -dm_pulse_width num      TBA" << endl;
-  cout << "    -dm_nbits num            TBA" << endl;
-  cout << "    -scrunching num          TBA" << endl;
-  cout << "    -scrunching_tol num      TBA" << endl;
-  cout << "    -rfi_tol num             TBA" << endl;
-  cout << "    -rfi_min_beams num       TBA" << endl;
-  cout << "    -boxcar_max num          TBA" << endl;
-  cout << "    -fswap                   Swap channel ordering for negative DM - SIGPROC 2,4 or 8 bit only" << endl;
+  cout << "    -dm_pulse_width num      the expected intrinsic width of the pulse signal in microseconds" << endl;
+  cout << "    -dm_nbits num            number of bits per sample in dedispersed, Fscrunched time series [" << p.dm_nbits << "]" << endl;
+  cout << "    -no_scrunching           don't use an adaptive time-resolution scheme" << endl;
+  cout << "    -scrunching_tol num      the smearing tolerance at which the time resolution is reduced [" << p.scrunch_tol << "]" << endl;
+  cout << "    -rfi_tol num             RFI exicision threshold limits [" << p.rfi_tol << "]" << endl;
+  cout << "    -boxcar_max num          maximum boxcar width in samples [" << p.boxcar_max << "]" << endl;
+  cout << "    -fswap                   swap channel ordering for negative DM - SIGPROC 2,4 or 8 bit only" << endl;
   cout << "    -min_tscrunch_width num  vary between high quality (large value) and high performance (low value)" << endl;
 }
