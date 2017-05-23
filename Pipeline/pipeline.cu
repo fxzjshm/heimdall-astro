@@ -259,6 +259,8 @@ hd_error hd_execute(hd_pipeline pl,
                                pl->params.baseline_length,
                                pl->params.rfi_tol,
                                pl->params.rfi_min_beams,
+                               pl->params.rfi_broad,
+                               pl->params.rfi_narrow,
                                1);//pl->params.boxcar_max);
   if( error != HD_NO_ERROR ) {
     return throw_error(error);

@@ -45,6 +45,8 @@ struct hd_params {
   hd_float scrunch_tol;    // Smear tolerance factor for time scrunching
   // RFI mitigation parameters
   hd_float rfi_tol;        // Probability of incorrectly identifying noise as RFI
+  hd_float rfi_narrow;     // perform narrow band RFI excision
+  hd_float rfi_broad;      // perform broad band 0-DM RFI excision
   hd_size  rfi_min_beams;  // Min no. beams to identify coincident signals as RFI
   // Single pulse search parameters
   hd_size  boxcar_max;     // Max boxcar width to convolve with

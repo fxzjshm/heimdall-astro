@@ -86,6 +86,12 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
     else if( argv[i] == string("-rfi_min_beams") ) {
       params->rfi_min_beams = atoi(argv[++i]);
     }
+    else if( argv[i] == string("-rfi_no_narrow") ) {
+      params->rfi_narrow = false;
+    }
+    else if( argv[i] == string("-rfi_no_broad") ) {
+      params->rfi_broad = false;
+    }
     else if( argv[i] == string("-boxcar_max") ) {
       params->boxcar_max = atoi(argv[++i]);
     }
@@ -169,7 +175,7 @@ void hd_print_usage()
   cout << "    -yield_cpu               yield CPU during GPU operations" << endl;
   cout << "    -gpu_id ID               run on specified GPU" << endl;
   cout << "    -nsamps_gulp num         number of samples to be read at a time [" << p.nsamps_gulp << "]" << endl;
-  cout << "    -baseline_length num     rebaselining length [" << p.baseline_length << "]" << endl;
+  cout << "    -baseline_length num     number of seconds over which to smooth the baseline [" << p.baseline_length << "]" << endl;
   cout << "    -beam ##                 over-ride beam number" << endl;
   cout << "    -output_dir path         create all output files in specified path" << endl;
   cout << "    -dm min max              min and max DM" << endl;
@@ -177,11 +183,13 @@ void hd_print_usage()
   cout << "    -coincidencer host:port  connect to the coincidencer on the specified host and port" << endl;
   cout << "    -zap_chans start end     zap all channels between start and end channels inclusive" << endl;
   cout << "    -max_giant_rate nevents  limit the maximum number of individual detections per minute to nevents" << endl;
-  cout << "    -dm_pulse_width num      the expected intrinsic width of the pulse signal in microseconds" << endl;
-  cout << "    -dm_nbits num            number of bits per sample in dedispersed, Fscrunched time series [" << p.dm_nbits << "]" << endl;
-  cout << "    -no_scrunching           don't use an adaptive time-resolution scheme" << endl;
-  cout << "    -scrunching_tol num      the smearing tolerance at which the time resolution is reduced [" << p.scrunch_tol << "]" << endl;
+  cout << "    -dm_pulse_width num      expected intrinsic width of the pulse signal in microseconds" << endl;
+  cout << "    -dm_nbits num            number of bits per sample in dedispersed time series [" << p.dm_nbits << "]" << endl;
+  cout << "    -no_scrunching           don't use an adaptive time scrunching during dedispersion" << endl;
+  cout << "    -scrunching_tol num      smear tolerance factor for time scrunching [" << p.scrunch_tol << "]" << endl;
   cout << "    -rfi_tol num             RFI exicision threshold limits [" << p.rfi_tol << "]" << endl;
+  cout << "    -rfi_no_narrow           disable narrow band RFI excision" << endl;
+  cout << "    -rfi_no_broad            disable 0-DM RFI excision" << endl;
   cout << "    -boxcar_max num          maximum boxcar width in samples [" << p.boxcar_max << "]" << endl;
   cout << "    -fswap                   swap channel ordering for negative DM - SIGPROC 2,4 or 8 bit only" << endl;
   cout << "    -min_tscrunch_width num  vary between high quality (large value) and high performance (low value)" << endl;

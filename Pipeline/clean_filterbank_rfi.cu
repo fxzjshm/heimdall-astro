@@ -261,6 +261,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
                               hd_float       baseline_length,
                               hd_float       rfi_tol,
                               hd_size        rfi_min_beams,
+                              bool           rfi_broad,
+                              bool           rfi_narrow,
                               hd_size        boxcar_max)
 {
   using thrust::counting_iterator;
@@ -296,7 +298,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   
   // Narrow-band RFI is not an issue when nbits is small
   // Note: Small nbits can actually cause this excision code to fail
-  if( nbits > 4 ) {
+  if ( nbits > 4 && rfi_narrow ) {
     // Narrow-band RFI excision
     // ------------------------
     // TODO: Any motivation for this?
@@ -307,6 +309,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     //   gets its own bandpass measurement.
     // TODO: Should this be halved? (Note: adds 25% to total cleaning time)
     hd_size nsamps_smooth = hd_size(baseline_length / (1 * dt));
+
     for( hd_size g=0; g<nsamps; g+=nsamps_smooth ) {
       hd_size nsamps_gulp = std::min(nsamps_smooth, nsamps-g);
       
@@ -342,148 +345,157 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   // First, dedisperse at the given DM
   // ---------------------------------
   dedisp_error derror;
-  // Create a new plan for the zero-DM dedispersion
-  dedisp_float f0 = dedisp_get_f0(main_plan);
-  dedisp_float df = dedisp_get_df(main_plan);
-  dedisp_plan plan;
-  derror = dedisp_create_plan(&plan, nchans, dt, f0, df);
-  if( derror != DEDISP_NO_ERROR ) {
-    return throw_dedisp_error(derror);
-  }
-  
-  derror = dedisp_disable_adaptive_dt(plan);
-  if( derror != DEDISP_NO_ERROR ) {
-    return throw_dedisp_error(derror);
-  }
-  derror = dedisp_set_dm_list(plan, &dm, 1);
-  if( derror != DEDISP_NO_ERROR ) {
-    return throw_dedisp_error(derror);
-  }
-  hd_size max_delay       = dedisp_get_max_delay(plan);
-  hd_size nsamps_computed = nsamps - max_delay;
-  
-  h_raw_series.resize(nsamps_computed);
-  
-  unsigned flags = DEDISP_USE_DEFAULT;
-  const dedisp_byte* in        = (const dedisp_byte*)&h_in_copy[0];
-  dedisp_byte*       out       = (dedisp_byte*)&h_raw_series[0];
-  hd_size            out_nbits = sizeof(out_type)*8;
-  derror = dedisp_execute(plan, nsamps,
-                          in, nbits,// in_stride,
-                          out, out_nbits,// out_stride,
-                          //gulp_dm, dm_gulp_size,
-                          flags);
-  if( derror != DEDISP_NO_ERROR ) {
-    return throw_dedisp_error(derror);
-  }
-  dedisp_destroy_plan(plan);
-  // ---------------------------------
-  
-  // Then baseline and normalise the time series
-  // -------------------------------------------
-  // Copy to the device and convert to floats
-  d_series = h_raw_series;
-  // Remove the baseline
-  hd_size nsamps_smooth = hd_size(baseline_length / (2 * dt));
-  hd_float* d_series_ptr = thrust::raw_pointer_cast(&d_series[0]);
-  
-  //write_device_time_series(d_series_ptr, nsamps_computed,
-  //                         dt, "dm0_dedispersed.tim");
-  
-  RemoveBaselinePlan baseline_remover;
-  error = baseline_remover.exec(d_series_ptr, nsamps_computed, nsamps_smooth);
-  if( error != HD_NO_ERROR ) {
-    return throw_error(error);
-  }
-  
-  //write_device_time_series(d_series_ptr, nsamps_computed,
-  //                         dt, "dm0_baselined.tim");
-  
-  // Normalise
-  error = normalise(d_series_ptr, nsamps_computed);
-  if( error != HD_NO_ERROR ) {
-    return throw_error(error);
-  }
-  
-  //write_device_time_series(d_series_ptr, nsamps_computed,
-  //                         dt, "dm0_normalised.tim");
-  // -------------------------------------------
-  
-  // Do a simple sigma cut to identify RFI
-  // -------------------------------------
-  d_rfi_mask.resize(nsamps_computed, 0);
-  
-  d_filtered_rfi_mask.resize(nsamps_computed, 0);
-  int* d_filtered_rfi_mask_ptr =
-    thrust::raw_pointer_cast(&d_filtered_rfi_mask[0]);
-  
-  // Create an RFI mask for this filter
-  thrust::transform(d_series.begin(), d_series.end(),
-                    d_rfi_mask.begin(),
-                    is_rfi<hd_float>(rfi_tol));
-  
-  // Note: The filtered output is shorter by boxcar_max samps
-  //         and offset by boxcar_max/2 samps.
-  d_filtered.resize(nsamps_computed + 1 - boxcar_max);
-  hd_float* d_filtered_ptr = thrust::raw_pointer_cast(&d_filtered[0]);
-  MatchedFilterPlan<hd_float> filter_plan;
-  filter_plan.prep(d_series_ptr, nsamps_computed, boxcar_max);
-  
-  for( hd_size filter_width=1; filter_width<=boxcar_max;
-       filter_width*=2 ) {
+  if (rfi_broad)
+  {
+    // Create a new plan for the zero-DM dedispersion
+    dedisp_float f0 = dedisp_get_f0(main_plan);
+    dedisp_float df = dedisp_get_df(main_plan);
+    dedisp_plan plan;
+    derror = dedisp_create_plan(&plan, nchans, dt, f0, df);
+    if( derror != DEDISP_NO_ERROR ) {
+      return throw_dedisp_error(derror);
+    }
     
-    // Apply the matched filter
-    // Note: The filtered output is shorter by boxcar_max samps
-    //         and offset by (boxcar_max-1)/2+1 samps.
-    filter_plan.exec(d_filtered_ptr, filter_width);
+    derror = dedisp_disable_adaptive_dt(plan);
+    if( derror != DEDISP_NO_ERROR ) {
+      return throw_dedisp_error(derror);
+    }
+    derror = dedisp_set_dm_list(plan, &dm, 1);
+    if( derror != DEDISP_NO_ERROR ) {
+      return throw_dedisp_error(derror);
+    }
+    hd_size max_delay       = dedisp_get_max_delay(plan);
+    hd_size nsamps_computed = nsamps - max_delay;
     
-    // Normalise the filtered time series (RMS ~ sqrt(time))
-    thrust::constant_iterator<hd_float> 
-      norm_val_iter(1.0 / sqrt((hd_float)filter_width));
-    thrust::transform(d_filtered.begin(),
-                      d_filtered.end(),
-                      norm_val_iter,
-                      d_filtered.begin(),
-                      thrust::multiplies<hd_float>());
+    h_raw_series.resize(nsamps_computed);
     
-    //hd_size filter_offset = (boxcar_max-1)/2+1;
-    hd_size filter_offset = boxcar_max / 2;
+    unsigned flags = DEDISP_USE_DEFAULT;
+    const dedisp_byte* in        = (const dedisp_byte*)&h_in_copy[0];
+    dedisp_byte*       out       = (dedisp_byte*)&h_raw_series[0];
+    hd_size            out_nbits = sizeof(out_type)*8;
+    derror = dedisp_execute(plan, nsamps,
+                            in, nbits,// in_stride,
+                            out, out_nbits,// out_stride,
+                            //gulp_dm, dm_gulp_size,
+                            flags);
+    if( derror != DEDISP_NO_ERROR ) {
+      return throw_dedisp_error(derror);
+    }
+    dedisp_destroy_plan(plan);
+    // ---------------------------------
+    
+    // Then baseline and normalise the time series
+    // -------------------------------------------
+    // Copy to the device and convert to floats
+    d_series = h_raw_series;
+    // Remove the baseline
+    hd_size nsamps_smooth = hd_size(baseline_length / (2 * dt));
+    hd_float* d_series_ptr = thrust::raw_pointer_cast(&d_series[0]);
+    
+    //write_device_time_series(d_series_ptr, nsamps_computed,
+    //                         dt, "dm0_dedispersed.tim");
+    
+    RemoveBaselinePlan baseline_remover;
+    error = baseline_remover.exec(d_series_ptr, nsamps_computed, nsamps_smooth);
+    if( error != HD_NO_ERROR ) {
+      return throw_error(error);
+    }
+    
+    //write_device_time_series(d_series_ptr, nsamps_computed,
+    //                         dt, "dm0_baselined.tim");
+    
+    // Normalise
+    error = normalise(d_series_ptr, nsamps_computed);
+    if( error != HD_NO_ERROR ) {
+      return throw_error(error);
+    }
+    
+    //write_device_time_series(d_series_ptr, nsamps_computed,
+    //                         dt, "dm0_normalised.tim");
+    // -------------------------------------------
+    
+    // Do a simple sigma cut to identify RFI
+    // -------------------------------------
+    d_rfi_mask.resize(nsamps_computed, 0);
+    
+    d_filtered_rfi_mask.resize(nsamps_computed, 0);
+    int* d_filtered_rfi_mask_ptr =
+      thrust::raw_pointer_cast(&d_filtered_rfi_mask[0]);
     
     // Create an RFI mask for this filter
-    thrust::transform(d_filtered.begin(), d_filtered.end(),
-                      d_filtered_rfi_mask.begin() + filter_offset,
+    thrust::transform(d_series.begin(), d_series.end(),
+                      d_rfi_mask.begin(),
                       is_rfi<hd_float>(rfi_tol));
     
-    // Filter the RFI mask
-    // Note: This ensures we zap all samples contributing to the peak
-    MatchedFilterPlan<int> mask_filter_plan;
-    mask_filter_plan.prep(d_filtered_rfi_mask_ptr, nsamps_computed,
-                          boxcar_max);
-    mask_filter_plan.exec(d_filtered_rfi_mask_ptr + filter_offset,
-                          filter_width);
+    // Note: The filtered output is shorter by boxcar_max samps
+    //         and offset by boxcar_max/2 samps.
+    d_filtered.resize(nsamps_computed + 1 - boxcar_max);
+    hd_float* d_filtered_ptr = thrust::raw_pointer_cast(&d_filtered[0]);
+    MatchedFilterPlan<hd_float> filter_plan;
+    filter_plan.prep(d_series_ptr, nsamps_computed, boxcar_max);
     
-    // Merge the filtered mask with the global mask
-    thrust::transform(d_rfi_mask.begin(), d_rfi_mask.end(),
-                      d_filtered_rfi_mask.begin(),
-                      d_rfi_mask.begin(),
-                      thrust::logical_or<int>());
+    for( hd_size filter_width=1; filter_width<=boxcar_max;
+         filter_width*=2 ) {
+      
+      // Apply the matched filter
+      // Note: The filtered output is shorter by boxcar_max samps
+      //         and offset by (boxcar_max-1)/2+1 samps.
+      filter_plan.exec(d_filtered_ptr, filter_width);
+      
+      // Normalise the filtered time series (RMS ~ sqrt(time))
+      thrust::constant_iterator<hd_float> 
+        norm_val_iter(1.0 / sqrt((hd_float)filter_width));
+      thrust::transform(d_filtered.begin(),
+                        d_filtered.end(),
+                        norm_val_iter,
+                        d_filtered.begin(),
+                        thrust::multiplies<hd_float>());
+      
+      //hd_size filter_offset = (boxcar_max-1)/2+1;
+      hd_size filter_offset = boxcar_max / 2;
+      
+      // Create an RFI mask for this filter
+      thrust::transform(d_filtered.begin(), d_filtered.end(),
+                        d_filtered_rfi_mask.begin() + filter_offset,
+                        is_rfi<hd_float>(rfi_tol));
+      
+      // Filter the RFI mask
+      // Note: This ensures we zap all samples contributing to the peak
+      MatchedFilterPlan<int> mask_filter_plan;
+      mask_filter_plan.prep(d_filtered_rfi_mask_ptr, nsamps_computed,
+                            boxcar_max);
+      mask_filter_plan.exec(d_filtered_rfi_mask_ptr + filter_offset,
+                            filter_width);
+      
+      // Merge the filtered mask with the global mask
+      thrust::transform(d_rfi_mask.begin(), d_rfi_mask.end(),
+                        d_filtered_rfi_mask.begin(),
+                        d_rfi_mask.begin(),
+                        thrust::logical_or<int>());
+    }
+    h_rfi_mask = d_rfi_mask;
+    // -------------------------------------
+    
+    // Finally, apply the mask to zap RFI in the filterbank
+    error = zap_filterbank_rfi(&h_rfi_mask[0],
+                               &h_in_copy[0],
+                               nsamps_computed,
+                               nbits,
+                               nchans,
+                               // TODO: This is somewhat arbitrary
+                               nsamps_smooth/4,
+                               &h_out[0]);
+    if( error != HD_NO_ERROR ) {
+      return error;
+    }
   }
-  h_rfi_mask = d_rfi_mask;
-  // -------------------------------------
-  
-  // Finally, apply the mask to zap RFI in the filterbank
-  error = zap_filterbank_rfi(&h_rfi_mask[0],
-                             &h_in_copy[0],
-                             nsamps_computed,
-                             nbits,
-                             nchans,
-                             // TODO: This is somewhat arbitrary
-                             nsamps_smooth/4,
-                             &h_out[0]);
-  if( error != HD_NO_ERROR ) {
-    return error;
+  else
+  {
+    thrust::copy(&h_in_copy[0],
+                 &h_in_copy[0] + nsamps*nchans*nbits/8,
+                 h_out);
   }
-  
+    
   return HD_NO_ERROR;
 }
 
