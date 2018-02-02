@@ -775,7 +775,7 @@ hd_error hd_execute(hd_pipeline pl,
   strftime (buffer, 64, HD_TIMESTR, (struct tm*) gmtime(&now));
 
   std::stringstream ss;
-  ss << std::setw(2) << std::setfill('0') << (pl->params.beam)%13+1;
+  ss << std::setw(2) << std::setfill('0') << pl->params.beam+1;
 
   std::ostringstream oss;
 
@@ -825,11 +825,8 @@ hd_error hd_execute(hd_pipeline pl,
     }
 
   }
-  //else
-  //{
-
-    // HACK %13
-
+  else
+  {
     if( pl->params.verbosity >= 2 )
       cout << "Output timestamp: " << buffer << endl;
 
@@ -852,10 +849,7 @@ hd_error hd_execute(hd_pipeline pl,
                   << h_group_filter_inds[i] << "\t"
                   << h_group_dm_inds[i] << "\t"
                   << h_group_dms[i] << "\t"
-                  //<< h_group_flags[i] << "\t"
                   << h_group_members[i] << "\t"
-                  // HACK %13
-                  //<< (beam+pl->params.beam)%13+1 << "\t"
                   << first_idx + h_group_begins[i] << "\t"
                   << first_idx + h_group_ends[i] << "\t"
                   << "\n";
@@ -864,7 +858,7 @@ hd_error hd_execute(hd_pipeline pl,
     else
       cout << "Skipping dump due to bad file open on " << filename << endl;
     cand_file.close();
-  //}
+  }
     
   stop_timer(candidates_timer);
   
