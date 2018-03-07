@@ -507,7 +507,7 @@ hd_error apply_manual_killmasks (dedisp_plan    main_plan,
   hd_size nchans = dedisp_get_channel_count(main_plan);
   for (unsigned i=0; i<num_channel_zaps; i++)
   {
-    for (unsigned j=channel_zaps[i].start; j<channel_zaps[i].end; j++)
+    for (unsigned j=channel_zaps[i].start; j<=channel_zaps[i].end; j++)
     {
       if (j < nchans)
         h_killmask[j] = 0;
