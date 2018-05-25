@@ -193,7 +193,6 @@ int main(int argc, char* argv[])
     total_nsamps += nsamps_processed;
     // Now we must 'rewind' to do samples that couldn't be processed
     // Note: This assumes nsamps_gulp > 2*overlap
-    cerr << "copying [" << nsamps_processed << " to " << nsamps_read+overlap << "] to base [0]" << endl;
     std::copy (&filterbank[nsamps_processed * stride],
                &filterbank[(nsamps_read+overlap) * stride],
                &filterbank[0]);
