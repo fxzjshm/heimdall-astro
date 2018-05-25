@@ -91,10 +91,12 @@ int main(int argc, char* argv[])
 #endif
 
   if (!params.override_beam)
+  {
     if (data_source->get_beam() > 0)
       params.beam = data_source->get_beam() - 1;
     else
       params.beam = 0;
+  }
 
   params.f0 = data_source->get_f0();
   params.df = data_source->get_df();
@@ -103,7 +105,6 @@ int main(int argc, char* argv[])
   if ( params.verbosity > 0)
     cout << "processing beam " << (params.beam+1)  << endl;
 
-  float tsamp = data_source->get_tsamp() / 1000000;
   size_t stride = data_source->get_stride();
   size_t nbits  = data_source->get_nbit();
 
@@ -111,9 +112,12 @@ int main(int argc, char* argv[])
   params.utc_start = data_source->get_utc_start();
   params.spectra_per_second = data_source->get_spectra_rate();
 
+  // ideally this should be nsamps_gulp + max overlap, but just do x2
+  size_t filterbank_bytes = 2 * nsamps_gulp * stride;
   if ( params.verbosity >= 2)
-    cout << "allocating filterbank data vector for " << nsamps_gulp << " samples with size " << (nsamps_gulp * stride) << " bytes" << endl;
-  std::vector<hd_byte> filterbank(nsamps_gulp * stride);
+    cout << "allocating filterbank data vector for " << nsamps_gulp
+         << " samples with size " << filterbank_bytes << " bytes" << endl;
+  std::vector<hd_byte> filterbank(filterbank_bytes);
   
   bool stop_requested = false;
   
@@ -142,12 +146,17 @@ int main(int argc, char* argv[])
   size_t overlap = 0;
   while( nsamps_read && !stop_requested )
   {
-    
     if ( params.verbosity >= 1 ) {
       cout << "Executing pipeline on new gulp of " << nsamps_read
            << " samples..." << endl;
     }
     //pipeline_timer.start();
+
+    if ( params.verbosity >= 2 ) {
+      cout << " nsamp_gulp=" << nsamps_gulp << " overlap=" << overlap
+           << " nsamps_read=" << nsamps_read << " nsamps_read+overlap="
+           << nsamps_read+overlap << endl;
+    }
       
     hd_size nsamps_processed;
     error = hd_execute(pipeline, &filterbank[0], nsamps_read+overlap, nbits,
@@ -174,31 +183,36 @@ int main(int argc, char* argv[])
       cout << "Main: nsamps_processed=" << nsamps_processed << endl;
 
     //pipeline_timer.stop();
+    //float tsamp = data_source->get_tsamp() / 1000000;
     //cout << "pipeline time: " << pipeline_timer.getTime() << " of " << (nsamps_read+overlap) * tsamp << endl;
     //pipeline_timer.reset();
+
+    if (params.verbosity >= 1)
+      cout << "Main: nsamps_overlap=" << overlap << endl;
 
     total_nsamps += nsamps_processed;
     // Now we must 'rewind' to do samples that couldn't be processed
     // Note: This assumes nsamps_gulp > 2*overlap
-    std::copy(&filterbank[nsamps_processed * stride],
-              &filterbank[(nsamps_read+overlap) * stride],
-              &filterbank[0]);
+    cerr << "copying [" << nsamps_processed << " to " << nsamps_read+overlap << "] to base [0]" << endl;
+    std::copy (&filterbank[nsamps_processed * stride],
+               &filterbank[(nsamps_read+overlap) * stride],
+               &filterbank[0]);
     overlap += nsamps_read - nsamps_processed;
-    nsamps_read = data_source->get_data(nsamps_gulp - overlap,
-                                        (char*)&filterbank[overlap*stride]);
+    nsamps_read = data_source->get_data(nsamps_gulp, (char*)&filterbank[overlap*stride]);
 
     // at the end of data, never execute the pipeline
-    if (nsamps_read < nsamps_gulp - overlap)
+    if (nsamps_read < nsamps_gulp)
       stop_requested = 1;
   }
  
   // final iteration for nsamps which is not a multiple of gulp size - overlap
-  if (stop_requested) 
+  if (stop_requested && nsamps_read > 0)
   {
     if (params.verbosity >= 1)
-      cout << "Final sub gulp: nsamps_read=" << nsamps_read << " nsamps_gulp=" << nsamps_gulp << " overlap=" << overlap << endl;
+      cout << "Final sub gulp: nsamps_read=" << nsamps_read 
+           << " nsamps_gulp=" << nsamps_gulp << " overlap=" << overlap << endl;
     hd_size nsamps_processed;
-    hd_size nsamps_to_process = nsamps_read + (overlap * 2 - params.boxcar_max);
+    hd_size nsamps_to_process = nsamps_read + overlap;
     if (nsamps_to_process > nsamps_gulp)
       nsamps_to_process = nsamps_gulp;
     error = hd_execute(pipeline, &filterbank[0], nsamps_to_process, nbits, 
