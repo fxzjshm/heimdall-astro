@@ -187,9 +187,6 @@ int main(int argc, char* argv[])
     //cout << "pipeline time: " << pipeline_timer.getTime() << " of " << (nsamps_read+overlap) * tsamp << endl;
     //pipeline_timer.reset();
 
-    if (params.verbosity >= 1)
-      cout << "Main: nsamps_overlap=" << overlap << endl;
-
     total_nsamps += nsamps_processed;
     // Now we must 'rewind' to do samples that couldn't be processed
     // Note: This assumes nsamps_gulp > 2*overlap
