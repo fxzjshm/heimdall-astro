@@ -70,7 +70,7 @@ bool Socket::bind ( const char * address, const int port )
   {
     m_addr.sin_addr.s_addr = inet_addr (address);
     // if we didn't parse the address as an IP address
-    if (m_addr.sin_addr.s_addr == -1)
+    if (m_addr.sin_addr.s_addr == INADDR_NONE)
     {
       struct hostent * hp = gethostbyname (address);
       memcpy(&(m_addr.sin_addr.s_addr), hp->h_addr, hp->h_length);
@@ -158,7 +158,7 @@ bool Socket::connect ( const std::string address, const int port )
   m_addr.sin_addr.s_addr = inet_addr (address.c_str());
 
   // if we didn't parse the address as an IP address
-  if (m_addr.sin_addr.s_addr == -1)
+  if (m_addr.sin_addr.s_addr == INADDR_NONE)
   {
     struct hostent * hp = gethostbyname (address.c_str());
     memcpy(&(m_addr.sin_addr.s_addr), hp->h_addr, hp->h_length);

@@ -68,7 +68,6 @@ int main(int argc, char* argv[])
   {
     switch (arg)
     {
-
       case 'a':
         address = strdup (optarg);
         break;
@@ -107,10 +106,6 @@ int main(int argc, char* argv[])
 
   while ( continue_processing )
   {
-
-    int beam_number = 0;
-    unsigned i = 0;
-
     if (nfiles > 0)
     {
       chunks.resize(1);
@@ -128,7 +123,6 @@ int main(int argc, char* argv[])
     {
       bool waiting_for_beams = true;
       int connections_waiting = 0;
-      unsigned int curr_beams = 0;
 
       while ( waiting_for_beams )
       {
@@ -173,7 +167,6 @@ int main(int argc, char* argv[])
               cerr << oss.str();
               cerr << "==================" << endl;
             }
-  
           }
 
           std::istringstream iss(oss.str());

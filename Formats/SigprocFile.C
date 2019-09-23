@@ -17,7 +17,7 @@ using std::endl;
 #include "hd/SigprocFile.h"
 
 SigprocFile::SigprocFile (const char* filename, bool _fswap)
-  : m_file_stream(filename, std::ios::binary), DataSource ()
+  : DataSource (), m_file_stream(filename, std::ios::binary)
 {
   m_error = 0;
   fswap = _fswap;
