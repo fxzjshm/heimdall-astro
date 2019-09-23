@@ -54,8 +54,9 @@ class CandidateChunk
     CandidateChunk(int argc, int optind, char ** argv);
     ~CandidateChunk();
 
-    int addBeam(std::string _utc_start, std::string _first_sample_utc, uint64_t _first_sample, unsigned int beam, uint64_t num_events, std::istringstream& ss);
-
+    void addBeam(std::string _utc_start, std::string _first_sample_utc, 
+                 uint64_t _first_sample, unsigned int beam,
+                 uint64_t num_events, std::istringstream& ss);
 
     void resize (unsigned _n_beams);
 
