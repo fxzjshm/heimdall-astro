@@ -52,7 +52,6 @@ Candidate::Candidate (const char * line, unsigned _beam_number)
 
 Candidate::~Candidate ()
 {
-  //cerr << "Candiate::~Candidate beam=" << beam << " sample_idx=" << sample_idx << endl;
 }
 
 void Candidate::header()
@@ -71,8 +70,8 @@ bool Candidate::is_coincident(const Candidate * c)
 
   // change temporal coincidence on bens suggestion 6/8/2012
   return ( (abs(c->sample_idx - sample_idx) <= tol) &&
-           (abs(c->dm_trial - dm_trial) <= sep_dm) &&
-           (abs(c->filter - filter) <= sep_filter) &&
+           (abs(int(c->dm_trial) - int(dm_trial)) <= sep_dm) &&
+           (abs(int(c->filter) - int(filter)) <= sep_filter) &&
            ((fabsf(c->snr - snr) / (c->snr + snr)) <= sep_snr));
 }
 
@@ -141,9 +140,9 @@ CandidateChunk::~CandidateChunk ()
 }
 
 // add beam
-int CandidateChunk::addBeam (string _utc_start, string _first_sample_utc, 
-                             uint64_t _first_sample, unsigned int beam, 
-                             uint64_t num_events, std::istringstream& ss)
+void CandidateChunk::addBeam (string _utc_start, string _first_sample_utc,
+                              uint64_t _first_sample, unsigned int beam,
+                              uint64_t num_events, std::istringstream& ss)
 {
   unsigned int ibeam = n_beams;
 
@@ -174,9 +173,6 @@ int CandidateChunk::addBeam (string _utc_start, string _first_sample_utc,
   {
     ss.getline(cand_line, 1024, '\n');
     cands[ibeam][ievent] = new Candidate(cand_line, beam);
-    //cerr << "cands[" << ibeam << "][" << ievent << "]=" << cands[ibeam][ievent] << endl;
-    //Candidate c(cand_line, beam);
-    //cands[ibeam].push_back(c);
   }
 }
 
