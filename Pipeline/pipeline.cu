@@ -49,7 +49,7 @@ using thrust::device_vector;
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
-  void stop_timer(Stopwatch& timer) { cudaThreadSynchronize(); timer.stop(); }
+  void stop_timer(Stopwatch& timer) { cudaDeviceSynchronize(); timer.stop(); }
 #else
   void start_timer(Stopwatch& timer) { }
   void stop_timer(Stopwatch& timer) { }
