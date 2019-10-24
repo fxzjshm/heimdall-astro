@@ -49,7 +49,7 @@ using thrust::device_vector;
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
-  void stop_timer(Stopwatch& timer) { cudaThreadSynchronize(); timer.stop(); }
+  void stop_timer(Stopwatch& timer) { cudaDeviceSynchronize(); timer.stop(); }
 #else
   void start_timer(Stopwatch& timer) { }
   void stop_timer(Stopwatch& timer) { }
@@ -133,7 +133,7 @@ hd_error hd_create_pipeline(hd_pipeline* pipeline_, hd_params params) {
   *pipeline_ = 0;
   
   // Note: We use a smart pointer here to automatically clean up after errors
-  typedef std::auto_ptr<hd_pipeline_t> smart_pipeline_ptr;
+  typedef std::unique_ptr<hd_pipeline_t> smart_pipeline_ptr;
   smart_pipeline_ptr pipeline = smart_pipeline_ptr(new hd_pipeline_t());
   if( !pipeline.get() ) {
     return throw_error(HD_MEM_ALLOC_FAILED);
@@ -712,10 +712,12 @@ hd_error hd_execute(hd_pipeline pl,
     if( pl->params.verbosity >= 2 ) {
       cout << "Grouping coincident candidates..." << endl;
     }
+
+    ConstRawCandidates * const_d_giants = (ConstRawCandidates *) &d_giants;
   
     hd_size label_count;
     error = label_candidate_clusters(giant_count,
-                                     *(ConstRawCandidates*)&d_giants,
+                                     *const_d_giants,
                                      pl->params.cand_sep_time,
                                      pl->params.cand_sep_filter,
                                      pl->params.cand_sep_dm,
@@ -751,7 +753,7 @@ hd_error hd_execute(hd_pipeline pl,
   
     merge_candidates(giant_count,
                      d_giant_labels_ptr,
-                     *(ConstRawCandidates*)&d_giants,
+                     *const_d_giants,
                      d_groups);
   
     // Look up the actual DM of each group

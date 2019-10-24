@@ -44,8 +44,6 @@ void usage(char * binary, hd_params params)
 
 int main(int argc, char* argv[])
 {
-  bool verbose = false;
-  dedisp_error derror;
   hd_params   params;
   hd_params   default_params;
   hd_set_default_params (&default_params);
@@ -99,10 +97,6 @@ int main(int argc, char* argv[])
                                     params.nchans,
                                     params.dm_tol,
                                     &dm_count);
-  if( derror != DEDISP_NO_ERROR ) {
-    throw_dedisp_error(derror);
-    return 1;
-  }
 
   for( hd_size i=0; i<dm_count; ++i ) 
   {

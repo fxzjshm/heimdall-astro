@@ -83,7 +83,7 @@ struct zap_fb_rfi_functor : public thrust::unary_function<WordType,WordType> {
       thrust::default_random_engine rng(seed);
       result = 0;
       // Iterate over channels in the word
-      for( int k=0; k<sizeof(WordType)*8; k+=nbits ) {
+      for( int k=0; k<int(sizeof(WordType)*8); k+=nbits ) {
         unsigned int min_t = t > max_resample_dist ?
           t - max_resample_dist : 0;
         unsigned int max_t = t < nsamps-1 - max_resample_dist ?
@@ -154,8 +154,7 @@ struct zap_narrow_rfi_functor : public thrust::unary_function<WordType,WordType>
     
     bool any_bad = false;
     // Iterate over channels in the word
-    //for( int k=0; k<sizeof(WordType)*8; k+=nbits ) {
-    for( int k=0; k<chans_per_word; ++k ) {
+    for( unsigned int k=0; k<chans_per_word; ++k ) {
       unsigned int c = w + k;
       WordType val = (word >> (k*nbits)) & bitmask;
       if( fabs(val - baseline[c]) > thresh ) {

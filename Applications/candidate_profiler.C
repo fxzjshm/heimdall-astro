@@ -311,23 +311,22 @@ int gen_dm_time_plot(string filename,
 	size_t first_samp;
 
   size_t max_delay = dedisp_get_max_delay(plan);
-  size_t delay = 2;
 
 	if( !do_filter ) {
 		nsamps     = out_nsamps * width;
-		in_nsamps  = out_nsamps * width + dedisp_get_max_delay(plan);
+		in_nsamps  = out_nsamps * width + max_delay;
 		first_samp = samp >= out_nsamps/2 * width ? samp - out_nsamps/2 * width : 0;
 	}
 	else {
 		nsamps     = out_nsamps + width-1;
-		in_nsamps  = out_nsamps + width-1 + dedisp_get_max_delay(plan);
+		in_nsamps  = out_nsamps + width-1 + max_delay;
 		first_samp = samp > out_nsamps/2 + width/2 ? samp - out_nsamps/2 - width/2 : 0;
 	}
 
 	// TODO: Ensure sample index is within upper bound
   if (verbose)
   {
-    cerr << "Max dispersion delay = " << dedisp_get_max_delay(plan) << endl;
+    cerr << "Max dispersion delay = " << max_delay << endl;
     cerr << "Input sample range = "
          << first_samp << " : "
          << first_samp+in_nsamps << endl;
