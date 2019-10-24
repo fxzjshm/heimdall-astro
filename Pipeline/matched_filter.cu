@@ -20,14 +20,14 @@ class MatchedFilterPlan_impl {
 public:
 	hd_error prep(const T* d_in, hd_size count, hd_size max_width) {
 		m_max_width = max_width;
-		
+
 		thrust::device_ptr<const T> d_in_begin(d_in);
 		thrust::device_ptr<const T> d_in_end(d_in + count);
 		
 		// Note: One extra element so that we include the final value
-		m_scanned.resize(count + 1);
-		thrust::exclusive_scan(d_in_begin, d_in_end + 1,
-		                       m_scanned.begin());
+		m_scanned.resize(count+1, 0);
+		thrust::inclusive_scan(d_in_begin, d_in_end,
+		                       m_scanned.begin()+1);
 		return HD_NO_ERROR;
 	}
 	
