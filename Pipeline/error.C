@@ -33,11 +33,11 @@ const char* hd_get_error_string(hd_error error)
 			return "Invalid pointer";
 		case HD_INVALID_STRIDE:
 			return "Invalid stride";
+		case HD_TOO_FEW_NSAMPS:
+			return "No. samples < maximum delay";
 		/*
 		case HD_NO_DM_LIST_SET:
 			return "No DM list has been set";
-		case HD_TOO_FEW_NSAMPS:
-			return "No. samples < maximum delay";
 		case HD_INVALID_FLAG_COMBINATION:
 			return "Invalid flag combination";
 		case HD_UNSUPPORTED_IN_NBITS:
@@ -49,7 +49,7 @@ const char* hd_get_error_string(hd_error error)
 			return "Prior GPU error.";
 		case HD_INTERNAL_GPU_ERROR:
 			return "Internal GPU error. Please contact the author(s).";
-    case HD_TOO_MANY_EVENTS:
+                case HD_TOO_MANY_EVENTS:
 			return "Too many events";
 		case HD_UNKNOWN_ERROR:
 			return "Unknown error. Please contact the author(s).";

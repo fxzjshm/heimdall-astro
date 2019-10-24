@@ -226,6 +226,11 @@ int main(int argc, char* argv[])
       if (params.verbosity >= 1)
         cerr << "WARNING: hd_execute produces too many events, some data skipped" << endl;
     }
+    else if (error == HD_TOO_FEW_NSAMPS)
+    {
+      if (params.verbosity >= 1)
+        cerr << "WARNING: hd_execute did not have enough samples to process" << endl;
+    }
     else
     {
       cerr << "ERROR: Pipeline execution failed" << endl;

@@ -347,6 +347,12 @@ hd_error hd_execute(hd_pipeline pl,
   
   // Set channel killmask for dedispersion
   dedisp_set_killmask(pl->dedispersion_plan, &h_killmask[0]);
+  if (dedisp_get_max_delay(pl->dedispersion_plan) > nsamps)
+  {
+    cerr << "maximum DM delay=" << dedisp_get_max_delay(pl->dedispersion_plan) << endl;
+    cerr << "Number of samples=" << nsamps << endl;
+    return throw_error(HD_TOO_FEW_NSAMPS);
+  }
   
   hd_size nsamps_computed  = nsamps - dedisp_get_max_delay(pl->dedispersion_plan);
   hd_size series_stride    = nsamps_computed;
