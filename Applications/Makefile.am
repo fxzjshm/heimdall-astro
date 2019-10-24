@@ -6,8 +6,12 @@ include_HEADERS =
 
 bin_PROGRAMS = heimdall coincidencer coincidencer_client candidate_profiler fil2pgm generate_dmlist
 
-# To find the dedisp lib from bbarsdell
-AM_CPPFLAGS = -I../ -I../Formats -I../Network -I../Pipeline -I$(HOME) @PSRDADA_CFLAGS@ @DEDISP_CFLAGS@
+AM_CPPFLAGS = -I$(top_srcdir) \
+	      -I$(top_srcdir)/Formats \
+	      -I$(top_srcdir)/Network \
+	      -I$(top_srcdir)/Pipeline \
+	      @PSRDADA_CFLAGS@ \
+	      @DEDISP_CFLAGS@
 
 heimdall_SOURCES = heimdall.C
 coincidencer_SOURCES = coincidencer.C Candidates.C
@@ -19,8 +23,6 @@ LDADD = $(top_builddir)/Formats/libhdformats.la \
   @CUDA_LIBS@ @DEDISP_LIBS@ @PSRDADA_LIBS@
 
 heimdall_CFLAGS   = $(CUDA_CFLAGS)
-#heimdall_LDADD    = $(CUDA_LIBS) @DEDISP_LIBS@ @PSRDADA_LIBS@
-#heimdall_LDFLAGS  = $(CUDA_LDFLAGS)
 generate_dmlist_CXXFLAGS = @DEDISP_CFLAGS@
 
 
