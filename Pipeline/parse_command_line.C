@@ -137,6 +137,9 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
     else if ( argv[i] == string("-fswap") ) {
       params->fswap = true;
     }
+    else if ( argv[i] == string("-boxcar_renorm") ) {
+      params->boxcar_renorm = true;
+    }
     else if( argv[i] == string("-zap_chans") ) {
       unsigned int izap = params->num_channel_zaps;
       params->num_channel_zaps++;
@@ -192,5 +195,6 @@ void hd_print_usage()
   cout << "    -rfi_no_broad            disable 0-DM RFI excision" << endl;
   cout << "    -boxcar_max num          maximum boxcar width in samples [" << p.boxcar_max << "]" << endl;
   cout << "    -fswap                   swap channel ordering for negative DM - SIGPROC 2,4 or 8 bit only" << endl;
+  cout << "    -boxcar_renorm           renormalise the boxcar filtered timeseries instead of rescale" << endl;
   cout << "    -min_tscrunch_width num  vary between high quality (large value) and high performance (low value)" << endl;
 }

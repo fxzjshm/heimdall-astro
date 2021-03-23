@@ -58,6 +58,7 @@ void hd_set_default_params(hd_params* params) {
   params->coincidencer_port = -1;
 
   params->fswap = false;
+  params->boxcar_renorm = false;
 	
 	// TESTING
 	//params->first_beam = 0;

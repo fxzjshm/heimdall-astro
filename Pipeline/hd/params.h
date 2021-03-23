@@ -67,6 +67,8 @@ struct hd_params {
 
   // swap channel ordering for negative DM searching
   bool fswap;
+
+  bool boxcar_renorm;     // Renormalise the time series after boxcar filtering
  
   // channel zapping
   unsigned int num_channel_zaps;

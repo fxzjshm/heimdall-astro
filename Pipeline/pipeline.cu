@@ -582,27 +582,31 @@ hd_error hd_execute(hd_pipeline pl,
                                      / rel_tscrunch_width + 1);
       hd_size cur_scrunch = cur_dm_scrunch * rel_tscrunch_width;
       
-      // Normalise the filtered time series (RMS ~ sqrt(time))
-      // TODO: Avoid/hide the ugly thrust code?
-      //         Consider making it a method of MatchedFilterPlan
-      /*
-      thrust::constant_iterator<hd_float> 
-        norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
-      thrust::transform(thrust::device_ptr<hd_float>(filtered_series),
-                        thrust::device_ptr<hd_float>(filtered_series)
-                        + cur_nsamps_filtered,
-                        norm_val_iter,
-                        thrust::device_ptr<hd_float>(filtered_series),
-                        thrust::multiplies<hd_float>());
-      */
-      // TESTING Proper normalisation
-      hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered);
-      thrust::transform(thrust::device_ptr<hd_float>(filtered_series),
-                        thrust::device_ptr<hd_float>(filtered_series)
-                        + cur_nsamps_filtered,
-                        thrust::make_constant_iterator(hd_float(1.0)/rms),
-                        thrust::device_ptr<hd_float>(filtered_series),
-                        thrust::multiplies<hd_float>());
+      if (pl->params.boxcar_renorm)
+      {
+        // recompute then RMS of the filtered time series, then use that for rescaling.
+        // Note that this method reduces the S/N of injected pulses. For more information
+        // see https://ui.adsabs.harvard.edu/abs/2021MNRAS.501.2316G/abstract [Appendix A]
+        hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered);
+        thrust::transform(thrust::device_ptr<hd_float>(filtered_series),
+                          thrust::device_ptr<hd_float>(filtered_series)
+                          + cur_nsamps_filtered,
+                          thrust::make_constant_iterator(hd_float(1.0)/rms),
+                          thrust::device_ptr<hd_float>(filtered_series),
+                          thrust::multiplies<hd_float>());
+      }
+      else
+      {
+        // rescale the filtered time series (RMS ~ sqrt(time))
+        thrust::constant_iterator<hd_float>
+          norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
+        thrust::transform(thrust::device_ptr<hd_float>(filtered_series),
+                          thrust::device_ptr<hd_float>(filtered_series)
+                          + cur_nsamps_filtered,
+                          norm_val_iter,
+                          thrust::device_ptr<hd_float>(filtered_series),
+                          thrust::multiplies<hd_float>());
+      }
 
       stop_timer(filter_timer);
       
