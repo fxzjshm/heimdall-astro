@@ -133,7 +133,11 @@ hd_error hd_create_pipeline(hd_pipeline* pipeline_, hd_params params) {
   *pipeline_ = 0;
   
   // Note: We use a smart pointer here to automatically clean up after errors
+#if __cplusplus <= 199711L
+  typedef std::auto_ptr<hd_pipeline_t> smart_pipeline_ptr;
+#else
   typedef std::unique_ptr<hd_pipeline_t> smart_pipeline_ptr;
+#endif
   smart_pipeline_ptr pipeline = smart_pipeline_ptr(new hd_pipeline_t());
   if( !pipeline.get() ) {
     return throw_error(HD_MEM_ALLOC_FAILED);
