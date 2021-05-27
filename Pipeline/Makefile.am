@@ -13,9 +13,5 @@ AM_CPPFLAGS = -I$(top_srcdir) \
 	      -I$(top_srcdir)/Formats \
 	      @DEDISP_CFLAGS@ @THRUST_CFLAGS@ @CUDA_CFLAGS@ $(BOOST_CPPFLAGS)
 
-if HAVE_PSRDADA
-AM_CPPFLAGS += @PSRDADA_CFLAGS@
-endif
-
 include $(top_srcdir)/config/Makefile.targets
 
