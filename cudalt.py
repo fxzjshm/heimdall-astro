@@ -37,7 +37,7 @@ args.extend(["-Xcompiler","-fPIC"]) # position indep code
 args.append("-o")
 args.append(pic_filepath)
 command = " ".join(args)
-print command
+print(command)
 
 # compile the .cu
 rv = os.system(command)
@@ -49,7 +49,7 @@ args = sys.argv[2:]
 args.append("-o")
 args.append(npic_filepath)
 command = " ".join(args)
-print command
+print(command)
 
 # compile the .cu
 rv = os.system(command)
@@ -57,7 +57,7 @@ if rv != 0:
     sys.exit(1)
 
 # get libtool version
-fd = os.popen("libtool --version")
+fd = os.popen("../libtool --version")
 libtool_version = fd.readline()
 # this loop supresses the broken pipe errors
 # you get by not reading all the data
