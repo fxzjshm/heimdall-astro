@@ -112,6 +112,13 @@ int main(int argc, char* argv[])
   params.utc_start = data_source->get_utc_start();
   params.spectra_per_second = data_source->get_spectra_rate();
 
+  // warn about dedisp bug of modulo 32 channels
+  if (params.nchans % 32 != 0)
+  {
+    cerr << "ERROR: Dedisp library supports multiples of 32 channels only" << endl;
+    return -1;
+  }
+
   // ideally this should be nsamps_gulp + max overlap, but just do x2
   size_t filterbank_bytes = 2 * nsamps_gulp * stride;
   if ( params.verbosity >= 2)
