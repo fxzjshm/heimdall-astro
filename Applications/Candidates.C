@@ -7,10 +7,9 @@
 
 #include "hd/Candidates.h"
 
-#include "tmutil.h"
-
 #include <fstream>
 
+#include <cstring>
 #include <math.h>
 #include <stdlib.h>
 #include <libgen.h>
@@ -284,7 +283,17 @@ time_t CandidateChunk::get_relative_age (std::string utc)
 time_t CandidateChunk::str2utctime (const char* str)
 {
   struct tm time;
-  return str2utctm (&time, str);
+
+  /* append the GMT+0 timeszone information */
+  char * str_utc = (char *) malloc(sizeof(char) * (strlen(str) + 4 + 1));
+  sprintf(str_utc, "%s UTC",str);
+
+  const char * format = "%Y-%m-%d-%H:%M:%S %Z";
+
+  strptime(str_utc, format, &time);
+
+  free(str_utc);
+  return timegm(&time);
 }
 
 time_t CandidateChunk::str2utctm (struct tm* time, const char* str)
