@@ -368,6 +368,30 @@ hd_error mean_scrunch2_array(const hd_float* d_in,
 	return HD_NO_ERROR;
 }
 
+// suggested by Ewan Barr (2016 email)
+struct linear_stretch_functor2: public thrust::unary_function<hd_float,hd_float>
+{
+        const hd_float* in;
+        unsigned in_size;
+        float step;
+        float correction;
+
+        linear_stretch_functor2(const hd_float* in_, unsigned in_size, float step)
+          : in(in_), in_size(in_size), step(step), correction(((int)(step/2))/step){}
+
+        inline __host__ __device__
+        hd_float operator()(unsigned out_idx) const
+        {
+                float fidx = ((float)out_idx) / step - correction;
+                unsigned idx = (unsigned) fidx;
+                if (fidx<0)
+                        idx = 0;
+                else if (idx + 1 >= in_size)
+                        idx = in_size-2;
+                return in[idx] + ((in[idx+1] - in[idx]) * (fidx-idx));
+        }
+};
+
 struct linear_stretch_functor
 	: public thrust::unary_function<hd_float,hd_float> {
 	const hd_float* in;
@@ -390,10 +414,16 @@ hd_error linear_stretch(const hd_float* d_in,
 {
 	using thrust::make_counting_iterator;
 	thrust::device_ptr<hd_float> d_out_begin(d_out);
-	
+
+        // Ewan found this code to contain a bug, and suggested the latter
+	// thrust::transform(make_counting_iterator<unsigned int>(0),
+	//                   make_counting_iterator<unsigned int>(out_count),
+	//                   d_out_begin,
+	//                   linear_stretch_functor(d_in, in_count, out_count));
 	thrust::transform(make_counting_iterator<unsigned int>(0),
 	                  make_counting_iterator<unsigned int>(out_count),
 	                  d_out_begin,
-	                  linear_stretch_functor(d_in, in_count, out_count));
+	                  linear_stretch_functor2(d_in, in_count, hd_float(out_count-1)/(in_count-1)));
+
 	return HD_NO_ERROR;
 }
