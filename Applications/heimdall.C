@@ -112,10 +112,10 @@ int main(int argc, char* argv[])
   params.utc_start = data_source->get_utc_start();
   params.spectra_per_second = data_source->get_spectra_rate();
 
-  // warn about dedisp bug of modulo 32 channels
-  if (params.nchans % 32 != 0)
+  // warn about dedisp bug of modulo 16 channels
+  if (params.nchans % 16 != 0)
   {
-    cerr << "ERROR: Dedisp library supports multiples of 32 channels only" << endl;
+    cerr << "ERROR: Dedisp library supports multiples of 16 channels only" << endl;
     return -1;
   }
 
