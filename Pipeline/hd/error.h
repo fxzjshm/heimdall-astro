@@ -11,8 +11,10 @@
 extern "C" {
 #endif
 
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
 #include <dedisp.h>
-#include <cuda_runtime_api.h>
+/* DPCT_ORIG #include <cuda_runtime_api.h>*/
 
 typedef int hd_error;
 
@@ -40,7 +42,8 @@ const char* hd_get_error_string(hd_error error);
 
 hd_error throw_error(hd_error error);
 hd_error throw_dedisp_error(dedisp_error error);
-hd_error throw_cuda_error(cudaError_t error);
+/* DPCT_ORIG hd_error throw_cuda_error(cudaError_t error);*/
+hd_error throw_cuda_error(int error);
 
 #ifdef __cplusplus
 } // closing brace for extern "C"

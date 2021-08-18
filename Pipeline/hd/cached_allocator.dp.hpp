@@ -7,7 +7,9 @@
 
 #pragma once
 
-#include <thrust/system/cuda/vector.h>
+/* DPCT_ORIG #include <thrust/system/cuda/vector.h>*/
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
 
 #include <map>
 #include <stdexcept>
@@ -114,9 +116,9 @@ struct my_tag : thrust::system::cuda::tag {};
 
 // overload get_temporary_buffer on my_tag
 // its job is to forward allocation requests to g_allocator
-template<typename T>
-  thrust::pair<T*, std::ptrdiff_t>
-    get_temporary_buffer(my_tag, std::ptrdiff_t n)
+template <typename T>
+/* DPCT_ORIG   thrust::pair<T*, std::ptrdiff_t>*/
+std::pair<T *, std::ptrdiff_t> get_temporary_buffer(my_tag, std::ptrdiff_t n)
 {
 	//std::cout << "get_temporary_buffer" << std::endl;
   // ask the allocator for sizeof(T) * n bytes
@@ -134,5 +136,6 @@ template<typename Pointer>
 {
 	//std::cout << "return_temporary_buffer" << std::endl;
   // return the pointer to the allocator
-  g_allocator.deallocate(thrust::raw_pointer_cast(p));
+/* DPCT_ORIG   g_allocator.deallocate(thrust::raw_pointer_cast(p));*/
+  g_allocator.deallocate(dpct::get_raw_pointer(p));
 }

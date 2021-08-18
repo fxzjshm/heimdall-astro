@@ -5,30 +5,39 @@
  *
  ***************************************************************************/
 
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
 #include "hd/matched_filter.h"
 #include "hd/strided_range.h"
 
-#include <thrust/device_vector.h>
-#include <thrust/transform_scan.h>
+/* DPCT_ORIG #include <thrust/device_vector.h>*/
+
+/* DPCT_ORIG #include <thrust/transform_scan.h>*/
 
 // TODO: Add error checking to the methods in here
 template<typename T>
 class MatchedFilterPlan_impl {
-	thrust::device_vector<T> m_scanned;
-	hd_size                  m_max_width;
+/* DPCT_ORIG 	thrust::device_vector<T> m_scanned;*/
+        dpct::device_vector<T> m_scanned;
+        hd_size                  m_max_width;
 	
 public:
 	hd_error prep(const T* d_in, hd_size count, hd_size max_width) {
 		m_max_width = max_width;
 
-		thrust::device_ptr<const T> d_in_begin(d_in);
-		thrust::device_ptr<const T> d_in_end(d_in + count);
-		
-		// Note: One extra element so that we include the final value
+/* DPCT_ORIG 		thrust::device_ptr<const T> d_in_begin(d_in);*/
+                dpct::device_pointer<const T> d_in_begin(d_in);
+/* DPCT_ORIG 		thrust::device_ptr<const T> d_in_end(d_in + count);*/
+                dpct::device_pointer<const T> d_in_end(d_in + count);
+
+                // Note: One extra element so that we include the final value
 		m_scanned.resize(count+1, 0);
-		thrust::inclusive_scan(d_in_begin, d_in_end,
-		                       m_scanned.begin()+1);
-		return HD_NO_ERROR;
+                /*
+                DPCT1007:10: Migration of this CUDA API is not supported by the
+                Intel(R) DPC++ Compatibility Tool.
+                */
+                thrust::inclusive_scan(d_in_begin, d_in_end, m_scanned.begin() + 1);
+                return HD_NO_ERROR;
 	}
 	
 	// Note: This writes div_round_up(count + 1 - max_width, tscrunch) values to d_out
@@ -37,10 +46,11 @@ public:
 	hd_error exec(T* d_out, hd_size filter_width, hd_size tscrunch=1) {
 		// TODO: Check that prep( ) has been called
 		// TODO: Check that width <= m_max_width
-		
-		thrust::device_ptr<T> d_out_begin(d_out);
-		
-		hd_size offset    = m_max_width / 2;
+
+/* DPCT_ORIG 		thrust::device_ptr<T> d_out_begin(d_out);*/
+                dpct::device_pointer<T> d_out_begin(d_out);
+
+                hd_size offset    = m_max_width / 2;
 		hd_size ahead     = (filter_width-1)/2+1;   // Divide and round up
 		hd_size behind    = filter_width / 2;       // Divide and round down
 		hd_size out_count = m_scanned.size() - m_max_width;
@@ -57,13 +67,16 @@ public:
 		strided_range<Iterator> in_range2(m_scanned.begin()+offset - behind,
 		                                  m_scanned.begin()+offset - behind + out_count,
 		                                  stride);
-		
-		thrust::transform(in_range1.begin(), in_range1.end(),
-		                  in_range2.begin(),
-		                  d_out_begin,
-		                  thrust::minus<T>());
-		
-		return HD_NO_ERROR;
+
+/* DPCT_ORIG 		thrust::transform(in_range1.begin(), in_range1.end(),*/
+                std::transform(oneapi::dpl::execution::make_device_policy(
+                                   dpct::get_default_queue()),
+                               in_range1.begin(), in_range1.end(),
+                               in_range2.begin(), d_out_begin,
+                               /* DPCT_ORIG thrust::minus<T>());*/
+                               std::minus<T>());
+
+                return HD_NO_ERROR;
 	}
 };
 

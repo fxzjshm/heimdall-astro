@@ -5,6 +5,10 @@
  *
  ***************************************************************************/
 
+#include <oneapi/dpl/execution>
+#include <oneapi/dpl/algorithm>
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
 #include "hd/measure_bandpass.h"
 #include "hd/median_filter.h"
 #include "hd/get_rms.h"
@@ -12,34 +16,51 @@
 // TESTING ONLY
 // #include "hd/write_time_series.h"
 
-#include <thrust/device_vector.h>
-#include <thrust/transform.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/random.h>
+/* DPCT_ORIG #include <thrust/device_vector.h>*/
+#include <dpct/dpl_utils.hpp>
+/* DPCT_ORIG #include <thrust/transform.h>*/
 
-template<typename WordType>
-struct unpack_functor : public thrust::unary_function<unsigned int, float> {
-	const WordType* in;
+/* DPCT_ORIG #include <thrust/iterator/counting_iterator.h>*/
+
+/* DPCT_ORIG #include <thrust/iterator/constant_iterator.h>*/
+
+/* DPCT_ORIG #include <thrust/random.h>*/
+
+template <typename WordType>
+/* DPCT_ORIG struct unpack_functor : public thrust::unary_function<unsigned int,
+   float> {*/
+/*
+DPCT1044:8: thrust::unary_function was removed because std::unary_function has
+been deprecated in C++11. You may need to remove references to typedefs from
+thrust::unary_function in the class definition.
+*/
+struct unpack_functor {
+        const WordType* in;
 	unsigned int    nbits;
 	unsigned int    chans_per_word;
 	WordType        bitmask;
 	unpack_functor(const WordType* in_, unsigned int nbits_)
 		: in(in_), nbits(nbits_),
 		  chans_per_word(sizeof(WordType)*8/nbits), bitmask((1<<nbits)-1) {}
-	
-	inline __host__ __device__
-	float operator()(unsigned int c) const {
-		unsigned int w = c / chans_per_word;
+
+/* DPCT_ORIG 	inline __host__ __device__*/
+        inline float operator()(unsigned int c) const {
+                unsigned int w = c / chans_per_word;
 		unsigned int k = c % chans_per_word;
 		return (float)((in[w] >> (k*nbits)) & bitmask);
 	}
 };
 
-template<typename T>
-struct abs_val : public thrust::unary_function<T,T> {
-	inline __host__ __device__
-	T operator()(T x) const { return fabs(x); }
+template <typename T>
+/* DPCT_ORIG struct abs_val : public thrust::unary_function<T,T> {*/
+/*
+DPCT1044:9: thrust::unary_function was removed because std::unary_function has
+been deprecated in C++11. You may need to remove references to typedefs from
+thrust::unary_function in the class definition.
+*/
+struct abs_val {
+/* DPCT_ORIG 	inline __host__ __device__*/
+        inline T operator()(T x) const { return fabs(x); }
 };
 hd_error measure_bandpass(const hd_byte* d_filterbank,
                           hd_size        nsamps,
@@ -55,31 +76,55 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	
 	//thrust::device_vector<hd_float> d_spectrum(nchans);
 	//hd_float* d_spectrum_ptr = thrust::raw_pointer_cast(&d_spectrum[0]);
-	thrust::device_ptr<hd_float> d_bandpass_begin(d_bandpass);
-	
-	// First we find the median of a selection of sample spectra
+/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_bandpass_begin(d_bandpass);*/
+        dpct::device_pointer<hd_float> d_bandpass_begin(d_bandpass);
+
+        // First we find the median of a selection of sample spectra
 	// TODO: Can/should make this a parameter?
 	// TODO: Does this give a good balance of performance vs. accuracy?
 	// Note: Changing this requires changing the code below.
 	hd_size spectrum_count = 5*5*5 *5*5;
-	thrust::device_vector<hd_float> d_sample_spectra1(spectrum_count*nchans);
-	thrust::device_vector<hd_float> d_sample_spectra2(spectrum_count/5*nchans);
-	thrust::device_vector<hd_float> d_sample_spectra3(spectrum_count/5/5*nchans);
-	thrust::device_vector<hd_float> d_sample_spectra4(spectrum_count/5/5/5*nchans);
-	thrust::device_vector<hd_float> d_sample_spectra5(spectrum_count/5/5/5/5*nchans);
-	
-	hd_float* d_sample_spectra1_ptr =
-		thrust::raw_pointer_cast(&d_sample_spectra1[0]);
-	hd_float* d_sample_spectra2_ptr =
-		thrust::raw_pointer_cast(&d_sample_spectra2[0]);
-	hd_float* d_sample_spectra3_ptr =
-		thrust::raw_pointer_cast(&d_sample_spectra3[0]);
-	hd_float* d_sample_spectra4_ptr =
-		thrust::raw_pointer_cast(&d_sample_spectra4[0]);
-	hd_float* d_sample_spectra5_ptr =
-		thrust::raw_pointer_cast(&d_sample_spectra5[0]);
-	
-	// TODO: Make this more random?
+/* DPCT_ORIG 	thrust::device_vector<hd_float>
+ * d_sample_spectra1(spectrum_count*nchans);*/
+        dpct::device_vector<hd_float> d_sample_spectra1(spectrum_count * nchans);
+/* DPCT_ORIG 	thrust::device_vector<hd_float>
+ * d_sample_spectra2(spectrum_count/5*nchans);*/
+        dpct::device_vector<hd_float> d_sample_spectra2(spectrum_count / 5 * nchans);
+/* DPCT_ORIG 	thrust::device_vector<hd_float>
+ * d_sample_spectra3(spectrum_count/5/5*nchans);*/
+        dpct::device_vector<hd_float> d_sample_spectra3(spectrum_count / 5 / 5 *
+                                                        nchans);
+/* DPCT_ORIG 	thrust::device_vector<hd_float>
+ * d_sample_spectra4(spectrum_count/5/5/5*nchans);*/
+        dpct::device_vector<hd_float> d_sample_spectra4(spectrum_count / 5 / 5 /
+                                                        5 * nchans);
+/* DPCT_ORIG 	thrust::device_vector<hd_float>
+ * d_sample_spectra5(spectrum_count/5/5/5/5*nchans);*/
+        dpct::device_vector<hd_float> d_sample_spectra5(spectrum_count / 5 / 5 /
+                                                        5 / 5 * nchans);
+
+        hd_float *d_sample_spectra1_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_sample_spectra1[0]);*/
+            dpct::get_raw_pointer(&d_sample_spectra1[0]);
+        hd_float *d_sample_spectra2_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_sample_spectra2[0]);*/
+            dpct::get_raw_pointer(&d_sample_spectra2[0]);
+        hd_float *d_sample_spectra3_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_sample_spectra3[0]);*/
+            dpct::get_raw_pointer(&d_sample_spectra3[0]);
+        hd_float *d_sample_spectra4_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_sample_spectra4[0]);*/
+            dpct::get_raw_pointer(&d_sample_spectra4[0]);
+        hd_float *d_sample_spectra5_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_sample_spectra5[0]);*/
+            dpct::get_raw_pointer(&d_sample_spectra5[0]);
+
+        // TODO: Make this more random?
 	hd_size seed = 123456;
 	thrust::default_random_engine rng(seed);
 	thrust::uniform_int_distribution<unsigned int> distribution(0, nsamps-1);
@@ -88,11 +133,18 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 		//hd_size t = i * spectrum_stride; // Regular spacing
 		hd_size t = distribution(rng); // Uniform random sampling
 		WordType* d_in = (WordType*)&d_filterbank[t*stride];
-		thrust::transform(make_counting_iterator<unsigned int>(0),
-		                  make_counting_iterator<unsigned int>(nchans),
-		                  d_sample_spectra1.begin() + i*nchans,
-		                  unpack_functor<WordType>(d_in, nbits));
-	}
+/* DPCT_ORIG 		thrust::transform(make_counting_iterator<unsigned
+ * int>(0),*/
+                std::transform(
+                    oneapi::dpl::execution::make_device_policy(
+                        dpct::get_default_queue()),
+                    dpct::make_counting_iterator<unsigned int>(0),
+                    /* DPCT_ORIG make_counting_iterator<unsigned
+                       int>(nchans),*/
+                    dpct::make_counting_iterator<unsigned int>(nchans),
+                    d_sample_spectra1.begin() + i * nchans,
+                    unpack_functor<WordType>(d_in, nbits));
+        }
 	
 	// Compute the 'remedian' (recursive median) of the sample spectra
 	// Note: We do this instead of a proper median for performance and simplicity
@@ -115,10 +167,14 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	//write_device_time_series(d_bandpass, nchans, 1.f, "median_spectrum.tim");
 	
 	// Now we smooth the spectrum to produce an estimate of the bandpass
-	thrust::device_vector<hd_float> d_scrunched_spectrum(nchans/5);
-	hd_float* d_scrunched_spectrum_ptr =
-		thrust::raw_pointer_cast(&d_scrunched_spectrum[0]);
-	// TODO: This algorithm was derived empirically. It may not be suitable
+/* DPCT_ORIG 	thrust::device_vector<hd_float>
+ * d_scrunched_spectrum(nchans/5);*/
+        dpct::device_vector<hd_float> d_scrunched_spectrum(nchans / 5);
+        hd_float *d_scrunched_spectrum_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_scrunched_spectrum[0]);*/
+            dpct::get_raw_pointer(&d_scrunched_spectrum[0]);
+        // TODO: This algorithm was derived empirically. It may not be suitable
 	//         if applied to a different observing setup.
 	median_scrunch5(d_bandpass, nchans,
 	                d_scrunched_spectrum_ptr);
@@ -147,33 +203,50 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	//std::vector<hd_float> sample_rms2(spectrum_count);
 	// TODO: These are on the device only because I couldn't be bothered
 	//         making host versions of the median_scrunch functions.
-	thrust::device_vector<hd_float> d_sample_rms1(spectrum_count);
-	thrust::device_vector<hd_float> d_sample_rms2(spectrum_count);
-	hd_float* d_sample_rms1_ptr =
-		thrust::raw_pointer_cast(&d_sample_rms1[0]);
-	hd_float* d_sample_rms2_ptr =
-		thrust::raw_pointer_cast(&d_sample_rms2[0]);
-	
-	for( hd_size i=0; i<spectrum_count; ++i ) {
+/* DPCT_ORIG 	thrust::device_vector<hd_float> d_sample_rms1(spectrum_count);*/
+        dpct::device_vector<hd_float> d_sample_rms1(spectrum_count);
+/* DPCT_ORIG 	thrust::device_vector<hd_float> d_sample_rms2(spectrum_count);*/
+        dpct::device_vector<hd_float> d_sample_rms2(spectrum_count);
+        hd_float *d_sample_rms1_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_sample_rms1[0]);*/
+            dpct::get_raw_pointer(&d_sample_rms1[0]);
+        hd_float *d_sample_rms2_ptr =
+            /* DPCT_ORIG
+               thrust::raw_pointer_cast(&d_sample_rms2[0]);*/
+            dpct::get_raw_pointer(&d_sample_rms2[0]);
+
+        for( hd_size i=0; i<spectrum_count; ++i ) {
 		// Subtract the bandpass from the spectrum
-		thrust::transform(d_sample_spectra1.begin() + i*nchans,
-		                  d_sample_spectra1.begin() + (i+1)*nchans,
-		                  d_bandpass_begin,
-		                  d_sample_spectra1.begin() + i*nchans,
-		                  thrust::minus<hd_float>());
-		// Take the absolute value
-		thrust::transform(d_sample_spectra1.begin() + i*nchans,
-		                  d_sample_spectra1.begin() + (i+1)*nchans,
-		                  d_sample_spectra1.begin() + i*nchans,
-		                  abs_val<hd_float>());
-		
-		//d_sample_rms1[i] = get_rms(d_sample_spectra1_ptr + i*nchans, nchans);
+/* DPCT_ORIG 		thrust::transform(d_sample_spectra1.begin() +
+ * i*nchans,*/
+                std::transform(
+                    oneapi::dpl::execution::make_device_policy(
+                        dpct::get_default_queue()),
+                    d_sample_spectra1.begin() + i * nchans,
+                    d_sample_spectra1.begin() + (i + 1) * nchans,
+                    d_bandpass_begin, d_sample_spectra1.begin() + i * nchans,
+                    /* DPCT_ORIG thrust::minus<hd_float>());*/
+                    std::minus<hd_float>());
+                // Take the absolute value
+/* DPCT_ORIG 		thrust::transform(d_sample_spectra1.begin() +
+ * i*nchans,*/
+                std::transform(oneapi::dpl::execution::make_device_policy(
+                                   dpct::get_default_queue()),
+                               d_sample_spectra1.begin() + i * nchans,
+                               d_sample_spectra1.begin() + (i + 1) * nchans,
+                               d_sample_spectra1.begin() + i * nchans,
+                               abs_val<hd_float>());
+
+                //d_sample_rms1[i] = get_rms(d_sample_spectra1_ptr + i*nchans, nchans);
 	}
-	
-	thrust::device_vector<hd_float> d_mad(nchans);
-	hd_float* d_mad_ptr = thrust::raw_pointer_cast(&d_mad[0]);
-	
-	// Compute the 'remedian' (recursive median) of the sample spectra
+
+/* DPCT_ORIG 	thrust::device_vector<hd_float> d_mad(nchans);*/
+        dpct::device_vector<hd_float> d_mad(nchans);
+/* DPCT_ORIG 	hd_float* d_mad_ptr = thrust::raw_pointer_cast(&d_mad[0]);*/
+        hd_float *d_mad_ptr = dpct::get_raw_pointer(&d_mad[0]);
+
+        // Compute the 'remedian' (recursive median) of the sample spectra
 	// Note: We do this instead of a proper median for performance and simplicity
 	median_scrunch5_array(d_sample_spectra1_ptr, nchans,
 	                      spectrum_count,
@@ -192,12 +265,16 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	                      d_mad_ptr);
 	
 	// Convert median absolute deviation to standard deviation
-	using namespace thrust::placeholders;
-	thrust::transform(d_mad.begin(), d_mad.end(),
-	                  d_mad.begin(),
-	                  _1 * 1.4826f);
-	
-	//write_device_time_series(d_mad_ptr, nchans, 1.f, "mad.tim");
+/* DPCT_ORIG 	using namespace thrust::placeholders;*/
+
+/* DPCT_ORIG 	thrust::transform(d_mad.begin(), d_mad.end(),*/
+        std::transform(oneapi::dpl::execution::make_device_policy(
+                           dpct::get_default_queue()),
+                       d_mad.begin(), d_mad.end(), d_mad.begin(), [=](auto _1) {
+                                       return _1 * 1.4826f;
+                       });
+
+        //write_device_time_series(d_mad_ptr, nchans, 1.f, "mad.tim");
 	/*
 	// Smooth the band RMS
 	median_scrunch5(d_mad_ptr, nchans,
@@ -228,8 +305,11 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	
 	// Find the median RMS across the band
 	std::vector<hd_float> h_mad(nchans);
-	thrust::copy(d_mad.begin(), d_mad.end(), h_mad.begin());
-	std::nth_element(h_mad.begin(), h_mad.begin()+h_mad.size()/2, h_mad.end());
+/* DPCT_ORIG 	thrust::copy(d_mad.begin(), d_mad.end(), h_mad.begin());*/
+        std::copy(oneapi::dpl::execution::make_device_policy(
+                      dpct::get_default_queue()),
+                  d_mad.begin(), d_mad.end(), h_mad.begin());
+        std::nth_element(h_mad.begin(), h_mad.begin()+h_mad.size()/2, h_mad.end());
 	*rms = h_mad[h_mad.size()/2];
 	
 	/*

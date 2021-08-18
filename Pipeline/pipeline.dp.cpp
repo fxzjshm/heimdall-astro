@@ -5,6 +5,10 @@
  *
  ***************************************************************************/
 
+#include <oneapi/dpl/execution>
+#include <oneapi/dpl/algorithm>
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
 #include <vector>
 #include <memory>
 #include <iostream>
@@ -16,15 +20,21 @@ using std::endl;
 #include <string>
 #include <fstream>
 
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
+/* DPCT_ORIG #include <thrust/host_vector.h>*/
+#include <dpct/dpl_utils.hpp>
+/* DPCT_ORIG #include <thrust/device_vector.h>*/
+
 using thrust::host_vector;
 using thrust::device_vector;
-#include <thrust/version.h>
-#include <thrust/copy.h>
-#include <thrust/reduce.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/gather.h>
+/* DPCT_ORIG #include <thrust/version.h>*/
+
+/* DPCT_ORIG #include <thrust/copy.h>*/
+
+/* DPCT_ORIG #include <thrust/reduce.h>*/
+
+/* DPCT_ORIG #include <thrust/iterator/constant_iterator.h>*/
+
+/* DPCT_ORIG #include <thrust/gather.h>*/
 
 #include "hd/pipeline.h"
 #include "hd/maths.h"
@@ -49,13 +59,19 @@ using thrust::device_vector;
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
-  void stop_timer(Stopwatch& timer) { cudaDeviceSynchronize(); timer.stop(); }
+/* DPCT_ORIG   void stop_timer(Stopwatch& timer) { cudaDeviceSynchronize();
+ * timer.stop(); }*/
+  void stop_timer(Stopwatch &timer) {
+   dpct::get_current_device().queues_wait_and_throw(); timer.stop();
+  }
 #else
   void start_timer(Stopwatch& timer) { }
   void stop_timer(Stopwatch& timer) { }
 #endif // HD_BENCHMARK
 
-#include <utility> // For std::pair
+#include <utility>
+#include <cmath>
+ // For std::pair
 template<typename T, typename U>
 std::pair<T&,U&> tie(T& a, U& b) { return std::pair<T&,U&>(a,b); }
 
@@ -71,19 +87,39 @@ struct hd_pipeline_t {
   device_vector<hd_float> d_filtered_series;
 };
 
-hd_error allocate_gpu(const hd_pipeline pl) {
+hd_error allocate_gpu(const hd_pipeline pl) try {
   // TODO: This is just a simple proc-->GPU heuristic to get us started
   int gpu_count;
-  cudaGetDeviceCount(&gpu_count);
+/* DPCT_ORIG   cudaGetDeviceCount(&gpu_count);*/
+  gpu_count = dpct::dev_mgr::instance().device_count();
   //int proc_idx;
   //MPI_Comm comm = pl->communicator;
   //MPI_Comm_rank(comm, &proc_idx);
   int proc_idx = pl->params.beam;
   int gpu_idx = pl->params.gpu_id;
-  
-  cudaError_t cerror = cudaSetDevice(gpu_idx);
-  if( cerror != cudaSuccess ) {
-    cerr << "Could not setCudaDevice to " << gpu_idx << ": " << cudaGetErrorString(cerror) <<  endl;
+
+/* DPCT_ORIG   cudaError_t cerror = cudaSetDevice(gpu_idx);*/
+  /*
+  DPCT1003:2: Migrated API does not return error code. (*, 0) is inserted. You
+  may need to rewrite this code.
+  */
+  int cerror = (dpct::dev_mgr::instance().select_device(gpu_idx), 0);
+/* DPCT_ORIG   if( cerror != cudaSuccess ) {*/
+  /*
+  DPCT1000:1: Error handling if-stmt was detected but could not be rewritten.
+  */
+  if (cerror != 0) {
+    /*
+    DPCT1001:0: The statement could not be removed.
+    */
+    /*
+    DPCT1009:3: SYCL uses exceptions to report errors and does not use the error
+    codes. The original code was commented out and a warning string was
+    inserted. You need to rewrite this code.
+    */
+    cerr << "Could not setCudaDevice to " << gpu_idx << ": "
+         << "cudaGetErrorString not supported" /*cudaGetErrorString(cerror)*/
+         << endl;
     return throw_cuda_error(cerror);
   }
   
@@ -95,10 +131,16 @@ hd_error allocate_gpu(const hd_pipeline pl) {
     if( pl->params.verbosity >= 2 ) {
       cout << "\tProcess " << proc_idx << " setting CPU to spin" << endl;
     }
-    cerror = cudaSetDeviceFlags(cudaDeviceScheduleSpin);
-    if( cerror != cudaSuccess ) {
+/* DPCT_ORIG     cerror = cudaSetDeviceFlags(cudaDeviceScheduleSpin);*/
+    /*
+    DPCT1027:4: The call to cudaSetDeviceFlags was replaced with 0, because
+    DPC++ currently does not support setting flags for devices.
+    */
+    cerror = 0;
+/* DPCT_ORIG     if( cerror != cudaSuccess ) {
       return throw_cuda_error(cerror);
-    }
+    }*/
+
   }
   else {
     if( pl->params.verbosity >= 2 ) {
@@ -108,13 +150,23 @@ hd_error allocate_gpu(const hd_pipeline pl) {
     //   The BlockingSync flag does the job, although it may interfere
     //     with GPU/CPU overlapping (not currently used).
     //cerror = cudaSetDeviceFlags(cudaDeviceScheduleYield);
-    cerror = cudaSetDeviceFlags(cudaDeviceBlockingSync);
-    if( cerror != cudaSuccess ) {
+/* DPCT_ORIG     cerror = cudaSetDeviceFlags(cudaDeviceBlockingSync);*/
+    /*
+    DPCT1027:5: The call to cudaSetDeviceFlags was replaced with 0, because
+    DPC++ currently does not support setting flags for devices.
+    */
+    cerror = 0;
+/* DPCT_ORIG     if( cerror != cudaSuccess ) {
       return throw_cuda_error(cerror);
-    }
+    }*/
   }
   
   return HD_NO_ERROR;
+}
+catch (sycl::exception const &exc) {
+  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+            << ", line:" << __LINE__ << std::endl;
+  std::exit(1);
 }
 
 unsigned int get_filter_index(unsigned int filter_width) {
@@ -282,8 +334,10 @@ hd_error hd_execute(hd_pipeline pl,
     return throw_error(error);
   }
 
-  hd_size good_chan_count = thrust::reduce(h_killmask.begin(),
-                                           h_killmask.end());
+/* DPCT_ORIG   hd_size good_chan_count = thrust::reduce(h_killmask.begin(),*/
+  hd_size good_chan_count = std::reduce(
+      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+      h_killmask.begin(), h_killmask.end());
   hd_size bad_chan_count = pl->params.nchans - good_chan_count;
   if( pl->params.verbosity >= 2 ) {
     cout << "Bad channel count = " << bad_chan_count << endl;
@@ -388,18 +442,27 @@ hd_error hd_execute(hd_pipeline pl,
   GetRMSPlan                  rms_getter;
   MatchedFilterPlan<hd_float> matched_filter_plan;
   GiantFinder                 giant_finder;
-  
-  thrust::device_vector<hd_float> d_giant_peaks;
-  thrust::device_vector<hd_size>  d_giant_inds;
-  thrust::device_vector<hd_size>  d_giant_begins;
-  thrust::device_vector<hd_size>  d_giant_ends;
-  thrust::device_vector<hd_size>  d_giant_filter_inds;
-  thrust::device_vector<hd_size>  d_giant_dm_inds;
-  thrust::device_vector<hd_size>  d_giant_members;
-  
-  typedef thrust::device_ptr<hd_float> dev_float_ptr;
-  typedef thrust::device_ptr<hd_size>  dev_size_ptr;
-  
+
+/* DPCT_ORIG   thrust::device_vector<hd_float> d_giant_peaks;*/
+  dpct::device_vector<hd_float> d_giant_peaks;
+/* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_inds;*/
+  dpct::device_vector<hd_size> d_giant_inds;
+/* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_begins;*/
+  dpct::device_vector<hd_size> d_giant_begins;
+/* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_ends;*/
+  dpct::device_vector<hd_size> d_giant_ends;
+/* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_filter_inds;*/
+  dpct::device_vector<hd_size> d_giant_filter_inds;
+/* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_dm_inds;*/
+  dpct::device_vector<hd_size> d_giant_dm_inds;
+/* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_members;*/
+  dpct::device_vector<hd_size> d_giant_members;
+
+/* DPCT_ORIG   typedef thrust::device_ptr<hd_float> dev_float_ptr;*/
+  typedef dpct::device_pointer<hd_float> dev_float_ptr;
+/* DPCT_ORIG   typedef thrust::device_ptr<hd_size>  dev_size_ptr;*/
+  typedef dpct::device_pointer<hd_size> dev_size_ptr;
+
   if( pl->params.verbosity >= 2 ) {
     cout << "\tDedispersing for DMs " << dm_list[0]
          << " to " << dm_list[dm_count-1] << "..." << endl;
@@ -459,28 +522,35 @@ hd_error hd_execute(hd_pipeline pl,
         
       cout << "\tBaselining and normalising each beam..." << endl;
     }
-    
-    hd_float* time_series = thrust::raw_pointer_cast(&pl->d_time_series[0]);
-    
+
+/* DPCT_ORIG     hd_float* time_series =
+ * thrust::raw_pointer_cast(&pl->d_time_series[0]);*/
+    hd_float *time_series = dpct::get_raw_pointer(&pl->d_time_series[0]);
+
     // Copy the time series to the device and convert to floats
     hd_size offset = dm_idx * series_stride * pl->params.dm_nbits/8;
     start_timer(copy_timer);
     switch( pl->params.dm_nbits ) {
     case 8:
-      thrust::copy((unsigned char*)&pl->h_dm_series[offset],
-                   (unsigned char*)&pl->h_dm_series[offset] + cur_nsamps,
-                   pl->d_time_series.begin());
+/* DPCT_ORIG       thrust::copy((unsigned char*)&pl->h_dm_series[offset],*/
+      std::copy(oneapi::dpl::execution::seq,
+                (unsigned char *)&pl->h_dm_series[offset],
+                (unsigned char *)&pl->h_dm_series[offset] + cur_nsamps,
+                pl->d_time_series.begin());
       break;
     case 16:
-      thrust::copy((unsigned short*)&pl->h_dm_series[offset],
-                   (unsigned short*)&pl->h_dm_series[offset] + cur_nsamps,
-                   pl->d_time_series.begin());
+/* DPCT_ORIG       thrust::copy((unsigned short*)&pl->h_dm_series[offset],*/
+      std::copy(oneapi::dpl::execution::seq,
+                (unsigned short *)&pl->h_dm_series[offset],
+                (unsigned short *)&pl->h_dm_series[offset] + cur_nsamps,
+                pl->d_time_series.begin());
       break;
     case 32:
       // Note: 32-bit implies float, not unsigned int
-      thrust::copy((float*)&pl->h_dm_series[offset],
-                   (float*)&pl->h_dm_series[offset] + cur_nsamps,
-                   pl->d_time_series.begin());
+/* DPCT_ORIG       thrust::copy((float*)&pl->h_dm_series[offset],*/
+      std::copy(oneapi::dpl::execution::seq, (float *)&pl->h_dm_series[offset],
+                (float *)&pl->h_dm_series[offset] + cur_nsamps,
+                pl->d_time_series.begin());
       break;
     default:
       return HD_INVALID_NBITS;
@@ -513,10 +583,16 @@ hd_error hd_execute(hd_pipeline pl,
     // ---------
     start_timer(normalise_timer);
     hd_float rms = rms_getter.exec(time_series, cur_nsamps);
-    thrust::transform(pl->d_time_series.begin(), pl->d_time_series.end(),
-                      thrust::make_constant_iterator(hd_float(1.0)/rms),
-                      pl->d_time_series.begin(),
-                      thrust::multiplies<hd_float>());
+/* DPCT_ORIG     thrust::transform(pl->d_time_series.begin(),
+ * pl->d_time_series.end(),*/
+    std::transform(
+        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        pl->d_time_series.begin(), pl->d_time_series.end(),
+        /* DPCT_ORIG thrust::make_constant_iterator(hd_float(1.0)/rms),*/
+        dpct::make_constant_iterator(hd_float(1.0) / rms),
+        pl->d_time_series.begin(),
+        /* DPCT_ORIG                       thrust::multiplies<hd_float>());*/
+        std::multiplies<hd_float>());
     stop_timer(normalise_timer);
     
     if( beam == 0 && dm_idx == write_dm && first_idx == 0 ) {
@@ -541,9 +617,11 @@ hd_error hd_execute(hd_pipeline pl,
     matched_filter_plan.prep(time_series, cur_nsamps, rel_boxcar_max);
     stop_timer(filter_timer);
     // --------------------------
-    
-    hd_float* filtered_series = thrust::raw_pointer_cast(&pl->d_filtered_series[0]);
-    
+
+/* DPCT_ORIG     hd_float* filtered_series =
+ * thrust::raw_pointer_cast(&pl->d_filtered_series[0]);*/
+    hd_float *filtered_series = dpct::get_raw_pointer(&pl->d_filtered_series[0]);
+
     // Note: Filtering is done using a combination of tscrunching and
     //         'proper' boxcar convolution. The parameter min_tscrunch_width
     //         indicates how much of each to do. Raising min_tscrunch_width
@@ -563,12 +641,15 @@ hd_error hd_execute(hd_pipeline pl,
       }
       
       // Note: Filter width is relative to the current time resolution
-      hd_size rel_min_tscrunch_width = std::max(pl->params.min_tscrunch_width
-                                                / cur_dm_scrunch,
-                                                hd_size(1));
-      hd_size rel_tscrunch_width = std::max(2 * rel_filter_width
+/* DPCT_ORIG       hd_size rel_min_tscrunch_width =
+   std::max(pl->params.min_tscrunch_width / cur_dm_scrunch, hd_size(1));*/
+      hd_size rel_min_tscrunch_width =
+          std::max(pl->params.min_tscrunch_width / cur_dm_scrunch, hd_size(1));
+/* DPCT_ORIG       hd_size rel_tscrunch_width = std::max(2 * rel_filter_width
                                             / rel_min_tscrunch_width,
-                                            hd_size(1));
+                                            hd_size(1));*/
+      hd_size rel_tscrunch_width =
+          std::max(2 * rel_filter_width / rel_min_tscrunch_width, hd_size(1));
       // Filter width relative to cur_dm_scrunch AND tscrunch
       hd_size rel_rel_filter_width = rel_filter_width / rel_tscrunch_width;
 
@@ -592,24 +673,39 @@ hd_error hd_execute(hd_pipeline pl,
         // Note that this method reduces the S/N of injected pulses. For more information
         // see https://ui.adsabs.harvard.edu/abs/2021MNRAS.501.2316G/abstract [Appendix A]
         hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered);
-        thrust::transform(thrust::device_ptr<hd_float>(filtered_series),
-                          thrust::device_ptr<hd_float>(filtered_series)
-                          + cur_nsamps_filtered,
-                          thrust::make_constant_iterator(hd_float(1.0)/rms),
-                          thrust::device_ptr<hd_float>(filtered_series),
-                          thrust::multiplies<hd_float>());
+/* DPCT_ORIG thrust::transform(thrust::device_ptr<hd_float>(filtered_series),*/
+        std::transform(
+            oneapi::dpl::execution::make_device_policy(
+                dpct::get_default_queue()),
+            dpct::device_pointer<hd_float>(filtered_series),
+            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series)*/
+            dpct::device_pointer<hd_float>(filtered_series) +
+                cur_nsamps_filtered,
+            /* DPCT_ORIG thrust::make_constant_iterator(hd_float(1.0)/rms),*/
+            dpct::make_constant_iterator(hd_float(1.0) / rms),
+            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series),*/
+            dpct::device_pointer<hd_float>(filtered_series),
+            /* DPCT_ORIG thrust::multiplies<hd_float>());*/
+            std::multiplies<hd_float>());
       }
       else
       {
         // rescale the filtered time series (RMS ~ sqrt(time))
         thrust::constant_iterator<hd_float>
           norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
-        thrust::transform(thrust::device_ptr<hd_float>(filtered_series),
-                          thrust::device_ptr<hd_float>(filtered_series)
-                          + cur_nsamps_filtered,
-                          norm_val_iter,
-                          thrust::device_ptr<hd_float>(filtered_series),
-                          thrust::multiplies<hd_float>());
+/* DPCT_ORIG thrust::transform(thrust::device_ptr<hd_float>(filtered_series),*/
+        std::transform(
+            oneapi::dpl::execution::make_device_policy(
+                dpct::get_default_queue()),
+            dpct::device_pointer<hd_float>(filtered_series),
+            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series)*/
+            dpct::device_pointer<hd_float>(filtered_series) +
+                cur_nsamps_filtered,
+            norm_val_iter,
+            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series),*/
+            dpct::device_pointer<hd_float>(filtered_series),
+            /* DPCT_ORIG thrust::multiplies<hd_float>());*/
+            std::multiplies<hd_float>());
       }
 
       stop_timer(filter_timer);
@@ -650,21 +746,34 @@ hd_error hd_execute(hd_pipeline pl,
       
       hd_size rel_cur_filtered_offset = (cur_filtered_offset /
                                          rel_tscrunch_width);
-      
-      using namespace thrust::placeholders;
-      thrust::transform(d_giant_inds.begin()+prev_giant_count,
-                        d_giant_inds.end(),
-                        d_giant_inds.begin()+prev_giant_count,
-                        /*first_idx +*/ (_1+rel_cur_filtered_offset)*cur_scrunch);
-      thrust::transform(d_giant_begins.begin()+prev_giant_count,
-                        d_giant_begins.end(),
-                        d_giant_begins.begin()+prev_giant_count,
-                        /*first_idx +*/ (_1+rel_cur_filtered_offset)*cur_scrunch);
-      thrust::transform(d_giant_ends.begin()+prev_giant_count,
-                        d_giant_ends.end(),
-                        d_giant_ends.begin()+prev_giant_count,
-                        /*first_idx +*/ (_1+rel_cur_filtered_offset)*cur_scrunch);
-      
+
+/* DPCT_ORIG       using namespace thrust::placeholders;*/
+
+/* DPCT_ORIG       thrust::transform(d_giant_inds.begin()+prev_giant_count,*/
+      std::transform(
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
+          d_giant_inds.begin() + prev_giant_count,
+          /*first_idx +*/ [=](auto _1) {
+                                                     return (_1 + rel_cur_filtered_offset) * cur_scrunch;
+          });
+/* DPCT_ORIG       thrust::transform(d_giant_begins.begin()+prev_giant_count,*/
+      std::transform(
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
+          d_giant_begins.begin() + prev_giant_count,
+          /*first_idx +*/ [=](auto _1) {
+                                                     return (_1 + rel_cur_filtered_offset) * cur_scrunch;
+          });
+/* DPCT_ORIG       thrust::transform(d_giant_ends.begin()+prev_giant_count,*/
+      std::transform(
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
+          d_giant_ends.begin() + prev_giant_count,
+          /*first_idx +*/ [=](auto _1) {
+                                                     return (_1 + rel_cur_filtered_offset) * cur_scrunch;
+          });
+
       d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx);
       d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
       // Note: This could be used to track total member samples if desired
@@ -692,29 +801,51 @@ hd_error hd_execute(hd_pipeline pl,
   
   start_timer(candidates_timer);
 
-  thrust::host_vector<hd_float> h_group_peaks;
-  thrust::host_vector<hd_size>  h_group_inds;
-  thrust::host_vector<hd_size>  h_group_begins;
-  thrust::host_vector<hd_size>  h_group_ends;
-  thrust::host_vector<hd_size>  h_group_filter_inds;
-  thrust::host_vector<hd_size>  h_group_dm_inds;
-  thrust::host_vector<hd_size>  h_group_members;
-  thrust::host_vector<hd_float> h_group_dms;
+/* DPCT_ORIG   thrust::host_vector<hd_float> h_group_peaks;*/
+  std::vector<hd_float> h_group_peaks;
+/* DPCT_ORIG   thrust::host_vector<hd_size>  h_group_inds;*/
+  std::vector<hd_size> h_group_inds;
+/* DPCT_ORIG   thrust::host_vector<hd_size>  h_group_begins;*/
+  std::vector<hd_size> h_group_begins;
+/* DPCT_ORIG   thrust::host_vector<hd_size>  h_group_ends;*/
+  std::vector<hd_size> h_group_ends;
+/* DPCT_ORIG   thrust::host_vector<hd_size>  h_group_filter_inds;*/
+  std::vector<hd_size> h_group_filter_inds;
+/* DPCT_ORIG   thrust::host_vector<hd_size>  h_group_dm_inds;*/
+  std::vector<hd_size> h_group_dm_inds;
+/* DPCT_ORIG   thrust::host_vector<hd_size>  h_group_members;*/
+  std::vector<hd_size> h_group_members;
+/* DPCT_ORIG   thrust::host_vector<hd_float> h_group_dms;*/
+  std::vector<hd_float> h_group_dms;
 
   //if (!too_many_giants)
   //{
-    thrust::device_vector<hd_size> d_giant_labels(giant_count);
-    hd_size* d_giant_labels_ptr = thrust::raw_pointer_cast(&d_giant_labels[0]);
-  
+/* DPCT_ORIG     thrust::device_vector<hd_size> d_giant_labels(giant_count);*/
+    dpct::device_vector<hd_size> d_giant_labels(giant_count);
+/* DPCT_ORIG     hd_size* d_giant_labels_ptr =
+ * thrust::raw_pointer_cast(&d_giant_labels[0]);*/
+    hd_size *d_giant_labels_ptr = dpct::get_raw_pointer(&d_giant_labels[0]);
+
     RawCandidates d_giants;
-    d_giants.peaks = thrust::raw_pointer_cast(&d_giant_peaks[0]);
-    d_giants.inds = thrust::raw_pointer_cast(&d_giant_inds[0]);
-    d_giants.begins = thrust::raw_pointer_cast(&d_giant_begins[0]);
-    d_giants.ends = thrust::raw_pointer_cast(&d_giant_ends[0]);
-    d_giants.filter_inds = thrust::raw_pointer_cast(&d_giant_filter_inds[0]);
-    d_giants.dm_inds = thrust::raw_pointer_cast(&d_giant_dm_inds[0]);
-    d_giants.members = thrust::raw_pointer_cast(&d_giant_members[0]);
-  
+/* DPCT_ORIG     d_giants.peaks = thrust::raw_pointer_cast(&d_giant_peaks[0]);*/
+    d_giants.peaks = dpct::get_raw_pointer(&d_giant_peaks[0]);
+/* DPCT_ORIG     d_giants.inds = thrust::raw_pointer_cast(&d_giant_inds[0]);*/
+    d_giants.inds = dpct::get_raw_pointer(&d_giant_inds[0]);
+/* DPCT_ORIG     d_giants.begins =
+ * thrust::raw_pointer_cast(&d_giant_begins[0]);*/
+    d_giants.begins = dpct::get_raw_pointer(&d_giant_begins[0]);
+/* DPCT_ORIG     d_giants.ends = thrust::raw_pointer_cast(&d_giant_ends[0]);*/
+    d_giants.ends = dpct::get_raw_pointer(&d_giant_ends[0]);
+/* DPCT_ORIG     d_giants.filter_inds =
+ * thrust::raw_pointer_cast(&d_giant_filter_inds[0]);*/
+    d_giants.filter_inds = dpct::get_raw_pointer(&d_giant_filter_inds[0]);
+/* DPCT_ORIG     d_giants.dm_inds =
+ * thrust::raw_pointer_cast(&d_giant_dm_inds[0]);*/
+    d_giants.dm_inds = dpct::get_raw_pointer(&d_giant_dm_inds[0]);
+/* DPCT_ORIG     d_giants.members =
+ * thrust::raw_pointer_cast(&d_giant_members[0]);*/
+    d_giants.members = dpct::get_raw_pointer(&d_giant_members[0]);
+
     hd_size filter_count = get_filter_index(pl->params.boxcar_max) + 1;
 
     if( pl->params.verbosity >= 2 ) {
@@ -739,37 +870,62 @@ hd_error hd_execute(hd_pipeline pl,
     if( pl->params.verbosity >= 2 ) {
       cout << "Candidate count = " << group_count << endl;
     }
-  
-    thrust::device_vector<hd_float> d_group_peaks(group_count);
-    thrust::device_vector<hd_size>  d_group_inds(group_count);
-    thrust::device_vector<hd_size>  d_group_begins(group_count);
-    thrust::device_vector<hd_size>  d_group_ends(group_count);
-    thrust::device_vector<hd_size>  d_group_filter_inds(group_count);
-    thrust::device_vector<hd_size>  d_group_dm_inds(group_count);
-    thrust::device_vector<hd_size>  d_group_members(group_count);
-  
-    thrust::device_vector<hd_float> d_group_dms(group_count);
-  
+
+/* DPCT_ORIG     thrust::device_vector<hd_float> d_group_peaks(group_count);*/
+    dpct::device_vector<hd_float> d_group_peaks(group_count);
+/* DPCT_ORIG     thrust::device_vector<hd_size>  d_group_inds(group_count);*/
+    dpct::device_vector<hd_size> d_group_inds(group_count);
+/* DPCT_ORIG     thrust::device_vector<hd_size>  d_group_begins(group_count);*/
+    dpct::device_vector<hd_size> d_group_begins(group_count);
+/* DPCT_ORIG     thrust::device_vector<hd_size>  d_group_ends(group_count);*/
+    dpct::device_vector<hd_size> d_group_ends(group_count);
+/* DPCT_ORIG     thrust::device_vector<hd_size>
+ * d_group_filter_inds(group_count);*/
+    dpct::device_vector<hd_size> d_group_filter_inds(group_count);
+/* DPCT_ORIG     thrust::device_vector<hd_size>  d_group_dm_inds(group_count);*/
+    dpct::device_vector<hd_size> d_group_dm_inds(group_count);
+/* DPCT_ORIG     thrust::device_vector<hd_size>  d_group_members(group_count);*/
+    dpct::device_vector<hd_size> d_group_members(group_count);
+
+/* DPCT_ORIG     thrust::device_vector<hd_float> d_group_dms(group_count);*/
+    dpct::device_vector<hd_float> d_group_dms(group_count);
+
     RawCandidates d_groups;
-    d_groups.peaks = thrust::raw_pointer_cast(&d_group_peaks[0]);
-    d_groups.inds = thrust::raw_pointer_cast(&d_group_inds[0]);
-    d_groups.begins = thrust::raw_pointer_cast(&d_group_begins[0]);
-    d_groups.ends = thrust::raw_pointer_cast(&d_group_ends[0]);
-    d_groups.filter_inds = thrust::raw_pointer_cast(&d_group_filter_inds[0]);
-    d_groups.dm_inds = thrust::raw_pointer_cast(&d_group_dm_inds[0]);
-    d_groups.members = thrust::raw_pointer_cast(&d_group_members[0]);
-  
+/* DPCT_ORIG     d_groups.peaks = thrust::raw_pointer_cast(&d_group_peaks[0]);*/
+    d_groups.peaks = dpct::get_raw_pointer(&d_group_peaks[0]);
+/* DPCT_ORIG     d_groups.inds = thrust::raw_pointer_cast(&d_group_inds[0]);*/
+    d_groups.inds = dpct::get_raw_pointer(&d_group_inds[0]);
+/* DPCT_ORIG     d_groups.begins =
+ * thrust::raw_pointer_cast(&d_group_begins[0]);*/
+    d_groups.begins = dpct::get_raw_pointer(&d_group_begins[0]);
+/* DPCT_ORIG     d_groups.ends = thrust::raw_pointer_cast(&d_group_ends[0]);*/
+    d_groups.ends = dpct::get_raw_pointer(&d_group_ends[0]);
+/* DPCT_ORIG     d_groups.filter_inds =
+ * thrust::raw_pointer_cast(&d_group_filter_inds[0]);*/
+    d_groups.filter_inds = dpct::get_raw_pointer(&d_group_filter_inds[0]);
+/* DPCT_ORIG     d_groups.dm_inds =
+ * thrust::raw_pointer_cast(&d_group_dm_inds[0]);*/
+    d_groups.dm_inds = dpct::get_raw_pointer(&d_group_dm_inds[0]);
+/* DPCT_ORIG     d_groups.members =
+ * thrust::raw_pointer_cast(&d_group_members[0]);*/
+    d_groups.members = dpct::get_raw_pointer(&d_group_members[0]);
+
     merge_candidates(giant_count,
                      d_giant_labels_ptr,
                      *const_d_giants,
                      d_groups);
   
     // Look up the actual DM of each group
-    thrust::device_vector<hd_float> d_dm_list(dm_list, dm_list+dm_count);
+/* DPCT_ORIG     thrust::device_vector<hd_float> d_dm_list(dm_list,
+ * dm_list+dm_count);*/
+    dpct::device_vector<hd_float> d_dm_list(dm_list, dm_list + dm_count);
+    /*
+    DPCT1007:6: Migration of this CUDA API is not supported by the Intel(R)
+    DPC++ Compatibility Tool.
+    */
     thrust::gather(d_group_dm_inds.begin(), d_group_dm_inds.end(),
-                   d_dm_list.begin(),
-                   d_group_dms.begin());
-  
+                   d_dm_list.begin(), d_group_dms.begin());
+
     // Device to host transfer of candidates
     h_group_peaks = d_group_peaks;
     h_group_inds = d_group_inds;

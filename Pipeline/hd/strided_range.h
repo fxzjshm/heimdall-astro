@@ -9,10 +9,17 @@
   This is taken from the Strided Range example supplied with Thrust.
  */
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/permutation_iterator.h>
-#include <thrust/functional.h>
+/* DPCT_ORIG #include <thrust/iterator/counting_iterator.h>*/
+#include <oneapi/dpl/execution>
+#include <oneapi/dpl/algorithm>
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
+#include <dpct/dpl_utils.hpp>
+/* DPCT_ORIG #include <thrust/iterator/transform_iterator.h>*/
+
+/* DPCT_ORIG #include <thrust/iterator/permutation_iterator.h>*/
+
+/* DPCT_ORIG #include <thrust/functional.h>*/
 
 // this example illustrates how to make strided access to a range of values
 // examples:
@@ -25,26 +32,48 @@
 template <typename Iterator>
 class strided_range {
 public:
+/* DPCT_ORIG     typedef typename thrust::iterator_difference<Iterator>::type
+ * difference_type;*/
+    typedef typename std::iterator_traits<Iterator>::difference_type
+        difference_type;
 
-    typedef typename thrust::iterator_difference<Iterator>::type difference_type;
-
-    struct stride_functor : public thrust::unary_function<difference_type,difference_type>
-    {
+/* DPCT_ORIG     struct stride_functor : public
+   thrust::unary_function<difference_type,difference_type>
+    {*/
+    /*
+    DPCT1044:11: thrust::unary_function was removed because std::unary_function
+    has been deprecated in C++11. You may need to remove references to typedefs
+    from thrust::unary_function in the class definition.
+    */
+    struct stride_functor {
         difference_type stride;
 
         stride_functor(difference_type stride)
             : stride(stride) {}
 
-        __host__ __device__
+/* DPCT_ORIG         __host__ __device__*/
+
         difference_type operator()(const difference_type& i) const
         { 
             return stride * i;
         }
     };
 
-    typedef typename thrust::counting_iterator<difference_type>                   CountingIterator;
-    typedef typename thrust::transform_iterator<stride_functor, CountingIterator> TransformIterator;
-    typedef typename thrust::permutation_iterator<Iterator,TransformIterator>     PermutationIterator;
+/* DPCT_ORIG     typedef typename thrust::counting_iterator<difference_type>
+ * CountingIterator;*/
+    typedef typename oneapi::dpl::counting_iterator<difference_type>
+        CountingIterator;
+/* DPCT_ORIG     typedef typename thrust::transform_iterator<stride_functor,
+ * CountingIterator> TransformIterator;*/
+    typedef typename oneapi::dpl::transform_iterator<CountingIterator,
+                                                     stride_functor>
+        TransformIterator;
+/* DPCT_ORIG     typedef typename
+ * thrust::permutation_iterator<Iterator,TransformIterator>
+ * PermutationIterator;*/
+    typedef
+        typename oneapi::dpl::permutation_iterator<Iterator, TransformIterator>
+            PermutationIterator;
 
     // type of the strided_range iterator
     typedef PermutationIterator iterator;

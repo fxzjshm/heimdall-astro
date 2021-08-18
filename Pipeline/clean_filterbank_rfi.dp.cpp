@@ -5,6 +5,10 @@
  *
  ***************************************************************************/
 
+#include <oneapi/dpl/execution>
+#include <oneapi/dpl/algorithm>
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
 #include "hd/clean_filterbank_rfi.h"
 #include "hd/remove_baseline.h"
 #include "hd/get_rms.h"
@@ -16,20 +20,28 @@
 #ifdef HAVE_MPI
 #include <mpi.h>
 #endif
-#include <thrust/host_vector.h>
-#include <thrust/device_vector.h>
-#include <thrust/random.h>
-#include <thrust/sequence.h>
-#include <thrust/sort.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/constant_iterator.h>
+/* DPCT_ORIG #include <thrust/host_vector.h>*/
+#include <dpct/dpl_utils.hpp>
+#include <cmath>
+
+/* DPCT_ORIG #include <thrust/device_vector.h>*/
+
+/* DPCT_ORIG #include <thrust/random.h>*/
+
+/* DPCT_ORIG #include <thrust/sequence.h>*/
+
+/* DPCT_ORIG #include <thrust/sort.h>*/
+
+/* DPCT_ORIG #include <thrust/iterator/counting_iterator.h>*/
+
+/* DPCT_ORIG #include <thrust/iterator/constant_iterator.h>*/
 
 // TESTING ONLY
 //#include "hd/write_time_series.h"
 
 // A simple hashing function taken from Thrust's Monte Carlo example
-inline __host__ __device__
-unsigned int hash(unsigned int a) {
+/* DPCT_ORIG inline __host__ __device__*/
+inline unsigned int hash(unsigned int a) {
     a = (a+0x7ed55d16) + (a<<12);
     a = (a^0xc761c23c) ^ (a>>19);
     a = (a+0x165667b1) + (a<<5);
@@ -39,18 +51,31 @@ unsigned int hash(unsigned int a) {
     return a;
 }
 
-template<typename T>
-struct abs_less_than : public thrust::unary_function<T,bool> {
+template <typename T>
+/* DPCT_ORIG struct abs_less_than : public thrust::unary_function<T,bool> {*/
+/*
+DPCT1044:44: thrust::unary_function was removed because std::unary_function has
+been deprecated in C++11. You may need to remove references to typedefs from
+thrust::unary_function in the class definition.
+*/
+struct abs_less_than {
   T thresh;
   abs_less_than(T thresh_) : thresh(thresh_) {}
-  inline __host__ __device__
-  bool operator()(T x) const {
+/* DPCT_ORIG   inline __host__ __device__*/
+  inline bool operator()(T x) const {
     return fabs(x) < thresh;
   }
 };
 
-template<typename WordType>
-struct zap_fb_rfi_functor : public thrust::unary_function<WordType,WordType> {
+template <typename WordType>
+/* DPCT_ORIG struct zap_fb_rfi_functor : public
+   thrust::unary_function<WordType,WordType> {*/
+/*
+DPCT1044:45: thrust::unary_function was removed because std::unary_function has
+been deprecated in C++11. You may need to remove references to typedefs from
+thrust::unary_function in the class definition.
+*/
+struct zap_fb_rfi_functor {
   // Note: Increasing this trades performance for accuracy
   enum { MAX_RESAMPLE_ATTEMPTS = 10 };
   const int*      mask;
@@ -66,8 +91,8 @@ struct zap_fb_rfi_functor : public thrust::unary_function<WordType,WordType> {
     : mask(mask_), in(in_),
       stride(stride_), nbits(nbits_), bitmask((1<<nbits)-1),
       nsamps(nsamps_), max_resample_dist(max_resample_dist_) {}
-  inline __host__ __device__
-  WordType operator()(unsigned int i) const {
+/* DPCT_ORIG   inline __host__ __device__*/
+  inline WordType operator()(unsigned int i) const {
     // Lift the 1D index into 2D filterbank coords
     // Note: c is the word, not the channel
     unsigned int t = i / stride;
@@ -108,8 +133,15 @@ struct zap_fb_rfi_functor : public thrust::unary_function<WordType,WordType> {
     return result;
   }
 };
-template<typename WordType>
-struct zap_narrow_rfi_functor : public thrust::unary_function<WordType,WordType> {
+template <typename WordType>
+/* DPCT_ORIG struct zap_narrow_rfi_functor : public
+   thrust::unary_function<WordType,WordType> {*/
+/*
+DPCT1044:46: thrust::unary_function was removed because std::unary_function has
+been deprecated in C++11. You may need to remove references to typedefs from
+thrust::unary_function in the class definition.
+*/
+struct zap_narrow_rfi_functor {
   // Note: Increasing this trades performance for accuracy
   enum { MAX_RESAMPLE_ATTEMPTS = 10 };
   WordType*       data;
@@ -129,16 +161,16 @@ struct zap_narrow_rfi_functor : public thrust::unary_function<WordType,WordType>
       stride(stride_), nbits(nbits_), bitmask((1<<nbits)-1),
       nchans(nchans_), max_resample_dist(max_resample_dist_),
       chans_per_word(sizeof(WordType)*8/nbits) {}
-  
-  inline __host__ __device__
-  WordType sample(unsigned int t, unsigned int c) const {
+
+/* DPCT_ORIG   inline __host__ __device__*/
+  inline WordType sample(unsigned int t, unsigned int c) const {
     unsigned int w = c / chans_per_word;
     unsigned int k = c % chans_per_word;
     return (data[t*stride + w] >> (k*nbits)) & bitmask;
   }
-  
-  inline __host__ __device__
-  void operator()(unsigned int i) const {
+
+/* DPCT_ORIG   inline __host__ __device__*/
+  inline void operator()(unsigned int i) const {
     // Lift the 1D index into 2D filterbank coords
     unsigned int t = i / stride;
     unsigned int w = i % stride;
@@ -210,41 +242,65 @@ hd_error zap_filterbank_rfi(const int* h_mask, const hd_byte* h_in,
   // TODO: Tidy this up. Could possibly pass device arrays rather than host.
   
   // Copy filterbank data to the device
-  thrust::device_vector<WordType> d_in((WordType*)h_in,
-                                       (WordType*)h_in + nsamps*stride);
-  thrust::device_vector<WordType> d_out(nsamps*stride);
-  thrust::device_vector<int>      d_mask(h_mask, h_mask+nsamps);
-  WordType* d_in_ptr   = thrust::raw_pointer_cast(&d_in[0]);
-  int*      d_mask_ptr = thrust::raw_pointer_cast(&d_mask[0]);
-  thrust::transform(thrust::counting_iterator<unsigned int>(0),
-                    thrust::counting_iterator<unsigned int>(nsamps*stride),
-                    d_out.begin(),
-                    zap_fb_rfi_functor<WordType>(d_mask_ptr, d_in_ptr,
-                                                 stride, nbits,
-                                                 nsamps, max_resample_dist));
+/* DPCT_ORIG   thrust::device_vector<WordType> d_in((WordType*)h_in,*/
+  dpct::device_vector<WordType> d_in((WordType *)h_in,
+                                     (WordType *)h_in + nsamps * stride);
+/* DPCT_ORIG   thrust::device_vector<WordType> d_out(nsamps*stride);*/
+  dpct::device_vector<WordType> d_out(nsamps * stride);
+/* DPCT_ORIG   thrust::device_vector<int>      d_mask(h_mask, h_mask+nsamps);*/
+  dpct::device_vector<int> d_mask(h_mask, h_mask + nsamps);
+/* DPCT_ORIG   WordType* d_in_ptr   = thrust::raw_pointer_cast(&d_in[0]);*/
+  WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
+/* DPCT_ORIG   int*      d_mask_ptr = thrust::raw_pointer_cast(&d_mask[0]);*/
+  int *d_mask_ptr = dpct::get_raw_pointer(&d_mask[0]);
+/* DPCT_ORIG   thrust::transform(thrust::counting_iterator<unsigned int>(0),*/
+  std::transform(
+      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+      oneapi::dpl::counting_iterator<unsigned int>(0),
+      /* DPCT_ORIG                     thrust::counting_iterator<unsigned
+         int>(nsamps*stride),*/
+      oneapi::dpl::counting_iterator<unsigned int>(nsamps * stride),
+      d_out.begin(),
+      zap_fb_rfi_functor<WordType>(d_mask_ptr, d_in_ptr, stride, nbits, nsamps,
+                                   max_resample_dist));
   // Copy back to the host
-  thrust::copy(d_out.begin(), d_out.end(),
-               (WordType*)h_out);
-  
+/* DPCT_ORIG   thrust::copy(d_out.begin(), d_out.end(),*/
+  std::copy(
+      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+      d_out.begin(), d_out.end(), (WordType *)h_out);
+
   return HD_NO_ERROR;
 }
 
-template<typename T>
-struct is_rfi : public thrust::unary_function<T, bool> {
+template <typename T>
+/* DPCT_ORIG struct is_rfi : public thrust::unary_function<T, bool> {*/
+/*
+DPCT1044:47: thrust::unary_function was removed because std::unary_function has
+been deprecated in C++11. You may need to remove references to typedefs from
+thrust::unary_function in the class definition.
+*/
+struct is_rfi {
   T thresh;
   is_rfi(T thresh_) : thresh(thresh_) {}
-  inline __host__ __device__
-  bool operator()(T x) const {
+/* DPCT_ORIG   inline __host__ __device__*/
+  inline bool operator()(T x) const {
     return fabs(x) > thresh;
   }
 };
 
-template<typename T>
-struct rfi_mask_functor : public thrust::binary_function<T,int,bool> {
+template <typename T>
+/* DPCT_ORIG struct rfi_mask_functor : public
+   thrust::binary_function<T,int,bool> {*/
+/*
+DPCT1044:48: thrust::binary_function was removed because std::binary_function
+has been deprecated in C++11. You may need to remove references to typedefs from
+thrust::binary_function in the class definition.
+*/
+struct rfi_mask_functor {
   T thresh;
   rfi_mask_functor(T thresh_) : thresh(thresh_) {}
-  inline __host__ __device__
-  bool operator()(T x, int mask) const {
+/* DPCT_ORIG   inline __host__ __device__*/
+  inline bool operator()(T x, int mask) const {
     return (fabs(x) > thresh) || mask;
   }
 };
@@ -270,31 +326,42 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   
   typedef hd_float out_type;
   std::vector<out_type>           h_raw_series;
-  thrust::device_vector<hd_float> d_series;
+/* DPCT_ORIG   thrust::device_vector<hd_float> d_series;*/
+  dpct::device_vector<hd_float> d_series;
   //thrust::host_vector<hd_float>   h_series;
-  thrust::device_vector<hd_float> d_filtered;
+/* DPCT_ORIG   thrust::device_vector<hd_float> d_filtered;*/
+  dpct::device_vector<hd_float> d_filtered;
   //thrust::host_vector<hd_float>   h_beams_series;
   //thrust::device_vector<hd_float> d_beams_series;
-  thrust::device_vector<int>      d_filtered_rfi_mask;
-  thrust::device_vector<int>      d_rfi_mask;
-  thrust::host_vector<int>        h_rfi_mask;
-  
+/* DPCT_ORIG   thrust::device_vector<int>      d_filtered_rfi_mask;*/
+  dpct::device_vector<int> d_filtered_rfi_mask;
+/* DPCT_ORIG   thrust::device_vector<int>      d_rfi_mask;*/
+  dpct::device_vector<int> d_rfi_mask;
+/* DPCT_ORIG   thrust::host_vector<int>        h_rfi_mask;*/
+  std::vector<int> h_rfi_mask;
+
   hd_size nchans = dedisp_get_channel_count(main_plan);
   
   // TODO: Any way to avoid having to use this?
-  thrust::host_vector<hd_byte> h_in_copy;
-  
+/* DPCT_ORIG   thrust::host_vector<hd_byte> h_in_copy;*/
+  std::vector<hd_byte> h_in_copy;
+
   typedef unsigned int WordType;
   hd_size stride = nchans * nbits/8 / sizeof(WordType);
   
   // TODO: Any way to avoid having to use this?
-  thrust::device_vector<WordType> d_in((WordType*)h_in,
-                                       (WordType*)h_in + nsamps*stride);
-  WordType* d_in_ptr = thrust::raw_pointer_cast(&d_in[0]);
-  
-  thrust::device_vector<hd_float> d_bandpass(nchans);
-  hd_float* d_bandpass_ptr = thrust::raw_pointer_cast(&d_bandpass[0]);
-  
+/* DPCT_ORIG   thrust::device_vector<WordType> d_in((WordType*)h_in,*/
+  dpct::device_vector<WordType> d_in((WordType *)h_in,
+                                     (WordType *)h_in + nsamps * stride);
+/* DPCT_ORIG   WordType* d_in_ptr = thrust::raw_pointer_cast(&d_in[0]);*/
+  WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
+
+/* DPCT_ORIG   thrust::device_vector<hd_float> d_bandpass(nchans);*/
+  dpct::device_vector<hd_float> d_bandpass(nchans);
+/* DPCT_ORIG   hd_float* d_bandpass_ptr =
+ * thrust::raw_pointer_cast(&d_bandpass[0]);*/
+  hd_float *d_bandpass_ptr = dpct::get_raw_pointer(&d_bandpass[0]);
+
   // Narrow-band RFI is not an issue when nbits is small
   // Note: Small nbits can actually cause this excision code to fail
   if ( nbits > 4 && rfi_narrow ) {
@@ -327,13 +394,17 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       // Zap narrow-band RFI
       counting_iterator<unsigned int> begin(g*stride);
       counting_iterator<unsigned int> end((g+nsamps_gulp)*stride);
-      thrust::for_each(begin, end,
-                       zapit);
+/* DPCT_ORIG       thrust::for_each(begin, end,*/
+      std::for_each(
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          begin, end, zapit);
     }
     
     h_in_copy.resize(nsamps*stride*sizeof(WordType));
-    thrust::copy(d_in.begin(), d_in.end(),
-                 (WordType*)&h_in_copy[0]);
+/* DPCT_ORIG     thrust::copy(d_in.begin(), d_in.end(),*/
+    std::copy(
+        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        d_in.begin(), d_in.end(), (WordType *)&h_in_copy[0]);
   }
   else {
     h_in_copy.assign(h_in, h_in+nsamps*nchans*nbits/8);
@@ -389,8 +460,10 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     d_series = h_raw_series;
     // Remove the baseline
     hd_size nsamps_smooth = hd_size(baseline_length / (2 * dt));
-    hd_float* d_series_ptr = thrust::raw_pointer_cast(&d_series[0]);
-    
+/* DPCT_ORIG     hd_float* d_series_ptr =
+ * thrust::raw_pointer_cast(&d_series[0]);*/
+    hd_float *d_series_ptr = dpct::get_raw_pointer(&d_series[0]);
+
     //write_device_time_series(d_series_ptr, nsamps_computed,
     //                         dt, "dm0_dedispersed.tim");
     
@@ -418,18 +491,23 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     d_rfi_mask.resize(nsamps_computed, 0);
     
     d_filtered_rfi_mask.resize(nsamps_computed, 0);
-    int* d_filtered_rfi_mask_ptr =
-      thrust::raw_pointer_cast(&d_filtered_rfi_mask[0]);
-    
+    int *d_filtered_rfi_mask_ptr =
+        /* DPCT_ORIG       thrust::raw_pointer_cast(&d_filtered_rfi_mask[0]);*/
+        dpct::get_raw_pointer(&d_filtered_rfi_mask[0]);
+
     // Create an RFI mask for this filter
-    thrust::transform(d_series.begin(), d_series.end(),
-                      d_rfi_mask.begin(),
-                      is_rfi<hd_float>(rfi_tol));
-    
+/* DPCT_ORIG     thrust::transform(d_series.begin(), d_series.end(),*/
+    std::transform(
+        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        d_series.begin(), d_series.end(), d_rfi_mask.begin(),
+        is_rfi<hd_float>(rfi_tol));
+
     // Note: The filtered output is shorter by boxcar_max samps
     //         and offset by boxcar_max/2 samps.
     d_filtered.resize(nsamps_computed + 1 - boxcar_max);
-    hd_float* d_filtered_ptr = thrust::raw_pointer_cast(&d_filtered[0]);
+/* DPCT_ORIG     hd_float* d_filtered_ptr =
+ * thrust::raw_pointer_cast(&d_filtered[0]);*/
+    hd_float *d_filtered_ptr = dpct::get_raw_pointer(&d_filtered[0]);
     MatchedFilterPlan<hd_float> filter_plan;
     filter_plan.prep(d_series_ptr, nsamps_computed, boxcar_max);
     
@@ -444,20 +522,25 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       // Normalise the filtered time series (RMS ~ sqrt(time))
       thrust::constant_iterator<hd_float> 
         norm_val_iter(1.0 / sqrt((hd_float)filter_width));
-      thrust::transform(d_filtered.begin(),
-                        d_filtered.end(),
-                        norm_val_iter,
-                        d_filtered.begin(),
-                        thrust::multiplies<hd_float>());
-      
+/* DPCT_ORIG       thrust::transform(d_filtered.begin(),*/
+      std::transform(
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          d_filtered.begin(), d_filtered.end(), norm_val_iter,
+          d_filtered.begin(),
+          /* DPCT_ORIG thrust::multiplies<hd_float>());*/
+          std::multiplies<hd_float>());
+
       //hd_size filter_offset = (boxcar_max-1)/2+1;
       hd_size filter_offset = boxcar_max / 2;
       
       // Create an RFI mask for this filter
-      thrust::transform(d_filtered.begin(), d_filtered.end(),
-                        d_filtered_rfi_mask.begin() + filter_offset,
-                        is_rfi<hd_float>(rfi_tol));
-      
+/* DPCT_ORIG       thrust::transform(d_filtered.begin(), d_filtered.end(),*/
+      std::transform(
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          d_filtered.begin(), d_filtered.end(),
+          d_filtered_rfi_mask.begin() + filter_offset,
+          is_rfi<hd_float>(rfi_tol));
+
       // Filter the RFI mask
       // Note: This ensures we zap all samples contributing to the peak
       MatchedFilterPlan<int> mask_filter_plan;
@@ -467,10 +550,13 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
                             filter_width);
       
       // Merge the filtered mask with the global mask
-      thrust::transform(d_rfi_mask.begin(), d_rfi_mask.end(),
-                        d_filtered_rfi_mask.begin(),
-                        d_rfi_mask.begin(),
-                        thrust::logical_or<int>());
+/* DPCT_ORIG       thrust::transform(d_rfi_mask.begin(), d_rfi_mask.end(),*/
+      std::transform(
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          d_rfi_mask.begin(), d_rfi_mask.end(), d_filtered_rfi_mask.begin(),
+          d_rfi_mask.begin(),
+          /* DPCT_ORIG                         thrust::logical_or<int>());*/
+          std::logical_or<int>());
     }
     h_rfi_mask = d_rfi_mask;
     // -------------------------------------
@@ -490,9 +576,9 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   }
   else
   {
-    thrust::copy(&h_in_copy[0],
-                 &h_in_copy[0] + nsamps*nchans*nbits/8,
-                 h_out);
+/* DPCT_ORIG     thrust::copy(&h_in_copy[0],*/
+    std::copy(oneapi::dpl::execution::seq, &h_in_copy[0],
+              &h_in_copy[0] + nsamps * nchans * nbits / 8, h_out);
   }
     
   return HD_NO_ERROR;
