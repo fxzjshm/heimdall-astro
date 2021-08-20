@@ -11,8 +11,11 @@
 #include <dpct/dpct.hpp>
 #include "hd/merge_candidates.h"
 
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
 #include <dpct/dpl_utils.hpp>
+#include "hd/utils.hpp"
+
+/* DPCT_ORIG #include <thrust/device_vector.h>*/
+
 /* DPCT_ORIG #include <thrust/sort.h>*/
 
 /* DPCT_ORIG #include <thrust/functional.h>*/
@@ -114,13 +117,15 @@ hd_error merge_candidates(hd_size            count,
 
         size_iterator  labels_begin(d_labels);
 	
-	const_float_iterator cand_peaks_begin(d_cands.peaks);
-	const_size_iterator  cand_inds_begin(d_cands.inds);
-	const_size_iterator  cand_begins_begin(d_cands.begins);
-	const_size_iterator  cand_ends_begin(d_cands.ends);
-	const_size_iterator  cand_filter_inds_begin(d_cands.filter_inds);
-	const_size_iterator  cand_dm_inds_begin(d_cands.dm_inds);
-	const_size_iterator  cand_members_begin(d_cands.members);
+        // TODO: fix for tuple not supporting non-const iterators
+        RawCandidates d_cands_non_const = *(RawCandidates *)(&d_cands);
+	float_iterator cand_peaks_begin(d_cands_non_const.peaks);
+	size_iterator  cand_inds_begin(d_cands_non_const.inds);
+	size_iterator  cand_begins_begin(d_cands_non_const.begins);
+	size_iterator  cand_ends_begin(d_cands_non_const.ends);
+	size_iterator  cand_filter_inds_begin(d_cands_non_const.filter_inds);
+	size_iterator  cand_dm_inds_begin(d_cands_non_const.dm_inds);
+	size_iterator  cand_members_begin(d_cands_non_const.members);
 	
 	float_iterator group_peaks_begin(d_groups.peaks);
 	size_iterator  group_inds_begin(d_groups.inds);
@@ -143,13 +148,10 @@ hd_error merge_candidates(hd_size            count,
                    labels_begin, labels_begin + count, d_permutation.begin());
 
         // Merge giants into groups according to the label
-	using thrust::reduce_by_key;
-	using thrust::make_zip_iterator;
-	using thrust::make_permutation_iterator;
 /* DPCT_ORIG 	reduce_by_key(labels_begin, labels_begin + count,*/
-        oneapi::dpl::reduce_by_segment(
-            oneapi::dpl::execution::make_device_policy(
-                dpct::get_default_queue()),
+        // oneapi::dpl::reduce_by_segment(
+                // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        third_party::reduce_by_key(
             labels_begin, labels_begin + count,
             /* DPCT_ORIG 	              make_permutation_iterator(*/
             oneapi::dpl::make_permutation_iterator(
@@ -162,11 +164,16 @@ hd_error merge_candidates(hd_size            count,
                                                                                cand_dm_inds_begin,
                                                                                cand_members_begin)),*/
                 oneapi::dpl::make_zip_iterator(cand_peaks_begin,
-                                               cand_inds_begin),
+                                                                               cand_inds_begin,
+                                                                               cand_begins_begin,
+                                                                               cand_ends_begin,
+                                                                               cand_filter_inds_begin,
+                                                                               cand_dm_inds_begin,
+                                                                               cand_members_begin),
                 d_permutation.begin()),
             /* DPCT_ORIG 	              thrust::make_discard_iterator(),
              */
-            dpct::discard_iterator(), // keys output
+            oneapi::dpl::discard_iterator(), // keys output
                                       /* DPCT_ORIG
                                          make_zip_iterator(thrust::make_tuple(group_peaks_begin,
                                                                                                  group_inds_begin,
@@ -175,8 +182,14 @@ hd_error merge_candidates(hd_size            count,
                                                                                                  group_filter_inds_begin,
                                                                                                  group_dm_inds_begin,
                                                                                                  group_members_begin)),*/
-            oneapi::dpl::make_zip_iterator(group_peaks_begin, group_inds_begin),
-            thrust::equal_to<hd_size>(), merge_candidates_functor());
+            oneapi::dpl::make_zip_iterator(group_peaks_begin,
+                                                                                                 group_inds_begin,
+                                                                                                 group_begins_begin,
+                                                                                                 group_ends_begin,
+                                                                                                 group_filter_inds_begin,
+                                                                                                 group_dm_inds_begin,
+                                                                                                 group_members_begin),
+            std::equal_to<hd_size>(), merge_candidates_functor());
 
         return HD_NO_ERROR;
 }

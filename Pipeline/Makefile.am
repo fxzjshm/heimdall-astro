@@ -3,7 +3,7 @@ include $(top_srcdir)/cuda.mk
 
 lib_LTLIBRARIES = libhdpipeline.la
 
-libhdpipeline_la_SOURCES = default_params.C error.C parse_command_line.C clean_filterbank_rfi.cu get_rms.cu matched_filter.cu remove_baseline.cu find_giants.cu label_candidate_clusters.cu merge_candidates.cu pipeline.cu measure_bandpass.cu median_filter.cu matched_filter.cu 
+libhdpipeline_la_SOURCES = default_params.C error.C parse_command_line.C clean_filterbank_rfi.dp.cpp get_rms.dp.cpp matched_filter.dp.cpp remove_baseline.dp.cpp find_giants.dp.cpp label_candidate_clusters.dp.cpp merge_candidates.dp.cpp pipeline.dp.cpp measure_bandpass.dp.cpp median_filter.dp.cpp matched_filter.dp.cpp 
 
 nobase_include_HEADERS = hd/median_filter.h hd/error.h hd/types.h
 
@@ -11,6 +11,7 @@ nobase_include_HEADERS = hd/median_filter.h hd/error.h hd/types.h
 AM_CPPFLAGS = -I$(top_srcdir) \
 	      -I$(top_srcdir)/Network \
 	      -I$(top_srcdir)/Formats \
+		  -I$(top_srcdir)/3rdparty/SYCL-PRNG/include \
 	      @DEDISP_CFLAGS@ @THRUST_CFLAGS@ @CUDA_CFLAGS@ $(BOOST_CPPFLAGS)
 
 include $(top_srcdir)/config/Makefile.targets

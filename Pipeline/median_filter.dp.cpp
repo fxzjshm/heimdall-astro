@@ -11,8 +11,10 @@
 #include <dpct/dpct.hpp>
 #include "hd/median_filter.h"
 
-/* DPCT_ORIG #include <thrust/device_ptr.h>*/
 #include <dpct/dpl_utils.hpp>
+
+/* DPCT_ORIG #include <thrust/device_ptr.h>*/
+
 /* DPCT_ORIG #include <thrust/transform.h>*/
 
 /* DPCT_ORIG #include <thrust/adjacent_difference.h>*/
@@ -80,15 +82,8 @@ inline float median5(float a, float b, float c, float d, float e) {
                                                  : d < a ? d : a;
 }
 
-struct median_filter3_kernel
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:49: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct median_filter3_kernel {
+    const hd_float* in;
 	unsigned int    count;
 	median_filter3_kernel(const hd_float* in_,
 	                      unsigned int count_)
@@ -108,15 +103,8 @@ thrust::unary_function in the class definition.
 	}
 };
 
-struct median_filter5_kernel
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:50: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct median_filter5_kernel {
+    const hd_float* in;
 	unsigned int    count;
 	median_filter5_kernel(const hd_float* in_,
 	                      unsigned int count_)
@@ -142,15 +130,8 @@ thrust::unary_function in the class definition.
 	}
 };
 
-struct median_scrunch3_kernel
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:51: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct median_scrunch3_kernel {
+    const hd_float* in;
 	median_scrunch3_kernel(const hd_float* in_)
 		: in(in_) {}
 /* DPCT_ORIG 	inline __host__ __device__*/
@@ -162,15 +143,8 @@ thrust::unary_function in the class definition.
 	}
 };
 
-struct median_scrunch5_kernel
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:52: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct median_scrunch5_kernel {
+    const hd_float* in;
 	median_scrunch5_kernel(const hd_float* in_)
 		: in(in_) {}
 /* DPCT_ORIG 	inline __host__ __device__*/
@@ -184,15 +158,8 @@ thrust::unary_function in the class definition.
 	}
 };
 
-struct median_scrunch3_array_kernel
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:53: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct median_scrunch3_array_kernel {
+    const hd_float* in;
 	const hd_size   size;
 	median_scrunch3_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
@@ -208,15 +175,8 @@ thrust::unary_function in the class definition.
 	}
 };
 
-struct median_scrunch5_array_kernel
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:54: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct median_scrunch5_array_kernel {
+    const hd_float* in;
 	const hd_size   size;
 	median_scrunch5_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
@@ -240,7 +200,7 @@ hd_error median_filter3(const hd_float* d_in,
 {
 /* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
         dpct::device_pointer<hd_float> d_out_begin(d_out);
-        using thrust::make_counting_iterator;
+        using dpct::make_counting_iterator;
 /* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
@@ -258,7 +218,7 @@ hd_error median_filter5(const hd_float* d_in,
 {
 /* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
         dpct::device_pointer<hd_float> d_out_begin(d_out);
-        using thrust::make_counting_iterator;
+        using dpct::make_counting_iterator;
 /* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
@@ -287,7 +247,7 @@ hd_error median_scrunch3(const hd_float* d_in,
 	else {
 		// Note: Truncating here is necessary
 		hd_size out_count = count / 3;
-		using thrust::make_counting_iterator;
+		using dpct::make_counting_iterator;
 /* DPCT_ORIG 		thrust::transform(make_counting_iterator<unsigned
  * int>(0),*/
                 std::transform(
@@ -331,7 +291,7 @@ hd_error median_scrunch5(const hd_float* d_in,
 	else {
 		// Note: Truncating here is necessary
 		hd_size out_count = count / 5;
-		using thrust::make_counting_iterator;
+		using dpct::make_counting_iterator;
 /* DPCT_ORIG 		thrust::transform(make_counting_iterator<unsigned
  * int>(0),*/
                 std::transform(
@@ -358,7 +318,7 @@ hd_error median_scrunch3_array(const hd_float* d_in,
         // Note: Truncating here is necessary
 	hd_size out_count = count / 3;
 	hd_size total     = array_size * out_count;
-	using thrust::make_counting_iterator;
+	using dpct::make_counting_iterator;
 /* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
@@ -383,7 +343,7 @@ hd_error median_scrunch5_array(const hd_float* d_in,
         // Note: Truncating here is necessary
 	hd_size out_count = count / 5;
 	hd_size total     = array_size * out_count;
-	using thrust::make_counting_iterator;
+	using dpct::make_counting_iterator;
 /* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
@@ -444,8 +404,9 @@ hd_error mean_filter2(const hd_float* d_in,
         DPCT1007:57: Migration of this CUDA API is not supported by the Intel(R)
         DPC++ Compatibility Tool.
         */
-        thrust::adjacent_difference(d_in_begin, d_in_begin + count, d_out_begin,
-                                    mean2_functor<hd_float>());
+        std::adjacent_difference(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                                 d_in_begin, d_in_begin + count, d_out_begin,
+                                 mean2_functor<hd_float>());
         return HD_NO_ERROR;
 }
 
@@ -459,7 +420,7 @@ hd_error mean_scrunch2_array(const hd_float* d_in,
         // Note: Truncating here is necessary
 	hd_size out_count = count / 2;
 	hd_size total     = array_size * out_count;
-	using thrust::make_counting_iterator;
+	using dpct::make_counting_iterator;
 /* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
@@ -528,7 +489,7 @@ hd_error linear_stretch(const hd_float* d_in,
                         hd_float*       d_out,
                         hd_size         out_count)
 {
-	using thrust::make_counting_iterator;
+	using dpct::make_counting_iterator;
 /* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
         dpct::device_pointer<hd_float> d_out_begin(d_out);
 

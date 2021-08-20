@@ -16,8 +16,11 @@
 // TESTING ONLY
 // #include "hd/write_time_series.h"
 
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
 #include <dpct/dpl_utils.hpp>
+#include "hd/utils.hpp"
+
+/* DPCT_ORIG #include <thrust/device_vector.h>*/
+
 /* DPCT_ORIG #include <thrust/transform.h>*/
 
 /* DPCT_ORIG #include <thrust/iterator/counting_iterator.h>*/
@@ -69,7 +72,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
                           hd_float*      d_bandpass,
                           hd_float*      rms)
 {
-	using thrust::make_counting_iterator;
+	using dpct::make_counting_iterator;
 	
 	typedef unsigned int WordType;
 	hd_size stride = nchans * nbits/8 / sizeof(WordType);
@@ -126,8 +129,8 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 
         // TODO: Make this more random?
 	hd_size seed = 123456;
-	thrust::default_random_engine rng(seed);
-	thrust::uniform_int_distribution<unsigned int> distribution(0, nsamps-1);
+	random_engine rng(seed);
+	uniform_int_distribution<unsigned int> distribution(0, nsamps-1);
 	// Extract spectrum_count sample spectra from the filterbank
 	for( hd_size i=0; i<spectrum_count; ++i ) {
 		//hd_size t = i * spectrum_stride; // Regular spacing

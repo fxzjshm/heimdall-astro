@@ -89,15 +89,8 @@ hd_error throw_dedisp_error(dedisp_error error) {
 		return HD_UNKNOWN_ERROR;
 	}
 }
-hd_error throw_cuda_error(cudaError_t error) {
+hd_error throw_cuda_error(int error) {
 	switch( error ) {
-	case cudaErrorInvalidDevice:
-		return HD_INVALID_DEVICE_INDEX;
-	case cudaErrorSetOnActiveProcess:
-		return HD_DEVICE_ALREADY_SET;
-	case cudaErrorMemoryAllocation:
-		return HD_MEM_ALLOC_FAILED;
-	// TODO: Translate the rest too
 	default:
 		return HD_UNKNOWN_ERROR;
 	}

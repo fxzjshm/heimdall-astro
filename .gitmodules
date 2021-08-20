@@ -1,0 +1,3 @@
+[submodule "3rdparty/SYCL-PRNG"]
+	path = 3rdparty/SYCL-PRNG
+	url = git@github.com:Wigner-GPU-Lab/SYCL-PRNG.git

@@ -11,10 +11,7 @@
 extern "C" {
 #endif
 
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include <dedisp.h>
-/* DPCT_ORIG #include <cuda_runtime_api.h>*/
 
 typedef int hd_error;
 

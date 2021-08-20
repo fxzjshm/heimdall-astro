@@ -20,12 +20,12 @@ using std::endl;
 #include <string>
 #include <fstream>
 
-/* DPCT_ORIG #include <thrust/host_vector.h>*/
 #include <dpct/dpl_utils.hpp>
+
+/* DPCT_ORIG #include <thrust/host_vector.h>*/
+
 /* DPCT_ORIG #include <thrust/device_vector.h>*/
 
-using thrust::host_vector;
-using thrust::device_vector;
 /* DPCT_ORIG #include <thrust/version.h>*/
 
 /* DPCT_ORIG #include <thrust/copy.h>*/
@@ -52,6 +52,7 @@ using thrust::device_vector;
 #include "hd/SocketException.h"
 #include "hd/stopwatch.h"         // For benchmarking
 //#include "hd/write_time_series.h" // For debugging
+#include "hd/utils.hpp"
 
 #include <dedisp.h>
 
@@ -71,6 +72,11 @@ using thrust::device_vector;
 
 #include <utility>
 #include <cmath>
+
+// for host-vector and device_vector
+template<typename T> using host_vector = std::vector<T>;
+template<typename T> using device_vector = dpct::device_vector<T>;
+
  // For std::pair
 template<typename T, typename U>
 std::pair<T&,U&> tie(T& a, U& b) { return std::pair<T&,U&>(a,b); }
@@ -104,6 +110,7 @@ hd_error allocate_gpu(const hd_pipeline pl) try {
   may need to rewrite this code.
   */
   int cerror = (dpct::dev_mgr::instance().select_device(gpu_idx), 0);
+  cerr << "using device " << dpct::dev_mgr::instance().current_device().get_info<cl::sycl::info::device::name>() << endl;
 /* DPCT_ORIG   if( cerror != cudaSuccess ) {*/
   /*
   DPCT1000:1: Error handling if-stmt was detected but could not be rewritten.
@@ -174,7 +181,7 @@ unsigned int get_filter_index(unsigned int filter_width) {
   unsigned int v = filter_width;
   static const unsigned int b[] = {0xAAAAAAAA, 0xCCCCCCCC, 0xF0F0F0F0, 
                                    0xFF00FF00, 0xFFFF0000};
-  register unsigned int r = (v & b[0]) != 0;
+  /* register */ unsigned int r = (v & b[0]) != 0;
   for( int i=4; i>0; --i) {
     r |= ((v & b[i]) != 0) << i;
   }
@@ -249,13 +256,15 @@ hd_error hd_create_pipeline(hd_pipeline* pipeline_, hd_params params) {
     cout << "\tInitialisation complete." << endl;
   }
   
+  /*
   if( params.verbosity >= 1 ) {
     cout << "Using Thrust v"
          << THRUST_MAJOR_VERSION << "."
          << THRUST_MINOR_VERSION << "."
          << THRUST_SUBMINOR_VERSION << endl;
   }
-  
+  */
+
   return HD_NO_ERROR;
 }
 
@@ -691,7 +700,7 @@ hd_error hd_execute(hd_pipeline pl,
       else
       {
         // rescale the filtered time series (RMS ~ sqrt(time))
-        thrust::constant_iterator<hd_float>
+        dpct::constant_iterator<hd_float>
           norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
 /* DPCT_ORIG thrust::transform(thrust::device_ptr<hd_float>(filtered_series),*/
         std::transform(
@@ -923,19 +932,29 @@ hd_error hd_execute(hd_pipeline pl,
     DPCT1007:6: Migration of this CUDA API is not supported by the Intel(R)
     DPC++ Compatibility Tool.
     */
-    thrust::gather(d_group_dm_inds.begin(), d_group_dm_inds.end(),
-                   d_dm_list.begin(), d_group_dms.begin());
+    gather( // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                d_group_dm_inds.begin(), d_group_dm_inds.end(),
+                d_dm_list.begin(), d_group_dms.begin());
 
     // Device to host transfer of candidates
-    h_group_peaks = d_group_peaks;
-    h_group_inds = d_group_inds;
-    h_group_begins = d_group_begins;
-    h_group_ends = d_group_ends;
-    h_group_filter_inds = d_group_filter_inds;
-    h_group_dm_inds = d_group_dm_inds;
-    h_group_members = d_group_members;
-    h_group_dms = d_group_dms;
+    // h_group_peaks = d_group_peaks;
+    oneapi_copy(d_group_peaks, h_group_peaks);
+    // h_group_inds = d_group_inds;
+    oneapi_copy(d_group_inds, h_group_inds);
+    // h_group_begins = d_group_begins;
+    oneapi_copy(d_group_begins, h_group_begins);
+    // h_group_ends = d_group_ends;
+    oneapi_copy(d_group_ends, h_group_ends);
+    // h_group_filter_inds = d_group_filter_inds;
+    oneapi_copy(d_group_filter_inds, h_group_filter_inds);
+    // h_group_dm_inds = d_group_dm_inds;
+    oneapi_copy(d_group_dm_inds, h_group_dm_inds);
+    // h_group_members = d_group_members;
+    oneapi_copy(d_group_members, h_group_members);
+    // h_group_dms = d_group_dms;
+    oneapi_copy(d_group_dms, h_group_dms);
     //h_group_flags = d_group_flags;
+    //oneapi_copy(d_group_flags, h_group_flags);
   //}
   
   if( pl->params.verbosity >= 2 ) {

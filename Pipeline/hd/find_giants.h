@@ -11,8 +11,15 @@
 #include <dpct/dpct.hpp>
 #include <vector>
 
+// see https://community.intel.com/t5/Intel-oneAPI-Threading-Building/tbb-task-has-not-been-declared/m-p/1255725#M14806
+#if defined(_GLIBCXX_RELEASE) && 9 <=_GLIBCXX_RELEASE && _GLIBCXX_RELEASE <= 10
+#define PSTL_USE_PARALLEL_POLICIES 0
+#define _GLIBCXX_USE_TBB_PAR_BACKEND 0
+#define _PSTL_PAR_BACKEND_SERIAL
+#endif
+
 // TODO: Any way to avoid including this here?
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
+#include <dpct/dpl_utils.hpp>
 
 #include <boost/shared_ptr.hpp>
 

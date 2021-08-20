@@ -908,11 +908,12 @@ private:
 	*/
 
 // Create an array of head flags indicating candidate segments
-	thrust::device_vector<int> d_giant_segments(giant_count);
-	thrust::adjacent_difference(d_giant_labels.begin(),
-	                            d_giant_labels.end(),
-	                            d_giant_segments.begin(),
-	                            thrust::not_equal_to<hd_size>());
+	dpct::device_vector<int> d_giant_segments(giant_count);
+	std::adjacent_difference(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                             d_giant_labels.begin(),
+	                         d_giant_labels.end(),
+	                         d_giant_segments.begin(),
+	                         std::not_equal_to<hd_size>());
 	if( giant_count > 0 ) {
 		d_giant_segments[0] = 1;
 	}
