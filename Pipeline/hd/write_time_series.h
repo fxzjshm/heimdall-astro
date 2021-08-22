@@ -5,10 +5,17 @@
  *
  ***************************************************************************/
 
+#include <oneapi/dpl/execution>
+#include <oneapi/dpl/algorithm>
+#include <CL/sycl.hpp>
+#include <dpct/dpct.hpp>
+
 #include <vector>
 #include <string>
 using std::string;
 #include <fstream>
+
+#include <dpct/dpl_utils.hpp>
 
 namespace detail {
 // TODO: These were copied from header.hpp. Not sure if this is a good idea.
@@ -50,6 +57,7 @@ void header_write(BinaryStream& stream,
 	header_write(stream, "za_start", za);
 }
 
+inline
 void write_time_series_header(size_t nbits, float dt, std::ofstream& out_file) {
 	// Write the required header information
 	header_write(out_file, "HEADER_START");
@@ -72,6 +80,7 @@ void write_time_series_header(size_t nbits, float dt, std::ofstream& out_file) {
 } // namespace detail
 
 // Float data type
+inline
 void write_host_time_series(const float* data,
 							size_t       nsamps,
                             float        dt,
@@ -84,23 +93,24 @@ void write_host_time_series(const float* data,
 	file.write((char*)data, size_bytes);
 	file.close();
 }
+
+inline
 void write_device_time_series(const float* data,
                               size_t      nsamps,
                               float       dt,
                               string      filename)
 {
 	std::vector<float> h_data(nsamps);
-	cudaError_t error = cudaMemcpy(&h_data[0], data,
-	                               nsamps*sizeof(float),
-								   cudaMemcpyDeviceToHost);
-	if( error != cudaSuccess ) {
-		throw std::runtime_error(std::string("write_time_series: cudaMemcpy failed: ") +
-								 cudaGetErrorString(error));
+	try{
+        dpct::get_default_queue().memcpy(&h_data[0], data, nsamps * sizeof(float)).wait();
+    } catch(sycl::exception e) {
+		throw std::runtime_error(std::string("write_time_series: cudaMemcpy failed: ") + e.what());
 	}
 	write_host_time_series(&h_data[0], nsamps, dt, filename);
 }
 
 // Integer data type
+inline
 void write_host_time_series(const unsigned int* data,
                             size_t      nsamps,
                             size_t      nbits,
@@ -136,6 +146,8 @@ void write_host_time_series(const unsigned int* data,
 	}
 	write_host_time_series(&float_data[0], nsamps, dt, filename);
 }
+
+inline
 void write_device_time_series(const unsigned int* data,
                               size_t      nsamps,
                               size_t      nbits,
@@ -144,12 +156,10 @@ void write_device_time_series(const unsigned int* data,
 {
 	size_t nsamps_words = nsamps * nbits/(sizeof(unsigned int)*8);
 	std::vector<unsigned int> h_data(nsamps_words);
-	cudaError_t error = cudaMemcpy(&h_data[0], data,
-	                               nsamps_words*sizeof(unsigned int),
-								   cudaMemcpyDeviceToHost);
-	if( error != cudaSuccess ) {
-		throw std::runtime_error(std::string("write_time_series: cudaMemcpy failed: ") +
-								 cudaGetErrorString(error));
+    try{
+        dpct::get_default_queue().memcpy(&h_data[0], data, nsamps_words * sizeof(unsigned int)).wait();
+    } catch(sycl::exception e) {
+		throw std::runtime_error(std::string("write_time_series: memcpy failed: ") + e.what());
 	}
 	write_host_time_series(&h_data[0], nsamps, nbits, dt, filename);
 }

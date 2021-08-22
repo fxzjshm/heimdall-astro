@@ -908,7 +908,7 @@ private:
 	*/
 
 // Create an array of head flags indicating candidate segments
-	dpct::device_vector<int> d_giant_segments(giant_count);
+	device_vector_wrapper<int> d_giant_segments(giant_count);
 	std::adjacent_difference(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
                              d_giant_labels.begin(),
 	                         d_giant_labels.end(),

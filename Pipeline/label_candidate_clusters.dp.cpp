@@ -12,6 +12,7 @@
 #include "hd/label_candidate_clusters.h"
 #include "hd/are_coincident.dp.hpp"
 #include <dpct/dpl_utils.hpp>
+#include "hd/utils.hpp"
 
 /*
 // Lexicographically projects 3D integer coordinates onto a 1D coordinate
@@ -223,14 +224,11 @@ hd_error label_candidate_clusters(hd_size            count,
 	              ci.new_label = min(ci.new_label, cj.new_label);
 	 */
 
-/* DPCT_ORIG 	thrust::device_ptr<hd_size> d_labels_begin(d_labels);*/
-        dpct::device_pointer<hd_size> d_labels_begin(d_labels);
-/* DPCT_ORIG 	thrust::sequence(d_labels_begin, d_labels_begin+count);*/
-        dpct::iota(oneapi::dpl::execution::make_device_policy(
-                       dpct::get_default_queue()),
+    dpct::device_pointer<hd_size> d_labels_begin(d_labels);
+    dpct::iota(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
                    d_labels_begin, d_labels_begin + count);
 
-        // This just does a brute-force O(N^2) search for neighbours and
+    // This just does a brute-force O(N^2) search for neighbours and
 	//   re-labels as the minimum label over neighbours.
 /* DPCT_ORIG 	thrust::for_each(make_counting_iterator<unsigned int>(0),*/
         std::for_each(oneapi::dpl::execution::make_device_policy(
@@ -243,7 +241,7 @@ hd_error label_candidate_clusters(hd_size            count,
                                       d_cands.ends, d_cands.filter_inds,
                                       d_cands.dm_inds, d_labels, time_tol,
                                       filter_tol, dm_tol));
-        /*
+    /*
 	using thrust::make_transform_iterator;
 	using thrust::make_zip_iterator;
 	using thrust::make_counting_iterator;
@@ -366,13 +364,10 @@ hd_error label_candidate_clusters(hd_size            count,
 	unsigned int* d_counter_address=&d_counter;
 /* DPCT_ORIG 	cudaGetSymbolAddress((void**)&d_counter_address, d_counter);*/
         // *((void **)&d_counter_address) = d_counter.get_ptr();
-/* DPCT_ORIG 	thrust::device_ptr<unsigned int>
- * d_counter_ptr(d_counter_address);*/
         dpct::device_pointer<unsigned int> d_counter_ptr(d_counter_address);
         *d_counter_ptr = 0;
 
-        std::for_each(oneapi::dpl::execution::make_device_policy(
-                          dpct::get_default_queue()),
+        std::for_each(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
                       dpct::make_counting_iterator<unsigned int>(0),
                       dpct::make_counting_iterator<unsigned int>(count),
                       trace_equivalency_chain<hd_size>(d_labels));
@@ -382,11 +377,9 @@ hd_error label_candidate_clusters(hd_size            count,
 	// Finally we do a quick count of the number of unique labels
 	//   This is efficiently achieved by checking where new labels are
 	//     unchanged from their original values (i.e., where d_labels[i] == i)
-/* DPCT_ORIG 	thrust::device_vector<int> d_label_roots(count);*/
-        dpct::device_vector<int> d_label_roots(count);
-/* DPCT_ORIG 	thrust::transform(d_labels_begin, d_labels_begin+count,*/
-        std::transform(oneapi::dpl::execution::make_device_policy(
-                           dpct::get_default_queue()),
+        device_vector_wrapper<int> d_label_roots;
+        d_label_roots.resize(count);
+        std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
                        d_labels_begin, d_labels_begin + count,
                        /* DPCT_ORIG make_counting_iterator<hd_size>(0),*/
                        dpct::make_counting_iterator<hd_size>(0),

@@ -3,6 +3,7 @@
 
 #include <CL/sycl.hpp>
 #include <dpct/dpct.hpp>
+#include <dpct/dpl_extras/vector.h>
 
 #include <PRNG/MWC64X.hpp>
 #include <type_traits>
@@ -139,10 +140,15 @@ void scatter_if(InputIterator1 first, InputIterator1 last, InputIterator2 map,
 template <typename InputIterator, typename RandomAccessIterator,
           typename OutputIterator>
 void gather(InputIterator map_first, InputIterator map_last,
-                      RandomAccessIterator input_first, OutputIterator result) {
+            RandomAccessIterator input_first, OutputIterator result) {
 
 #pragma unroll
     for (auto i = map_first; i != map_last; i++) {
+        auto diff1 = i - map_first;
+        auto ptr1 = result + (i - map_first);
+        auto val1 = *(result + (i - map_first));
+        auto idx = *i;
+        auto val2 = input_first[*i];
         *(result + (i - map_first)) = input_first[*i];
     }
     /*
@@ -209,10 +215,39 @@ reduce_by_key(InputIterator1 keys_first, InputIterator1 keys_last,
 }
 } // namespace third_party
 
-template <typename device_vector_type, typename host_vector_type>
-void oneapi_copy(device_vector_type device_vector,
-                 host_vector_type host_vector) {
+template <typename T, typename A1, typename A2>
+void oneapi_copy(dpct::device_vector<T, A2> &d,
+                 std::vector<T, A1> &h) {
+    h.resize(d.size());
+
     std::copy(
         oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        device_vector.begin(), device_vector.end(), host_vector.begin());
+        d.begin(), d.end(), h.begin());
+
+    // dpct::get_default_queue().memcpy(&h[0], d.begin(), d.size() * sizeof(T)).wait();
 }
+
+#ifndef DPCT_USM_LEVEL_NONE
+template <typename T,
+          typename Allocator = sycl::usm_allocator<T, sycl::usm::alloc::shared>>
+#else
+template <typename T, typename Allocator = cl::sycl::buffer_allocator>
+#endif
+class device_vector_wrapper : public dpct::device_vector<T, Allocator> {
+public:
+    using size_type = std::size_t;
+    using dpct::device_vector<T, Allocator>::device_vector;
+
+    template <typename OtherAllocator>
+    dpct::device_vector<T, Allocator> &operator=(const std::vector<T, OtherAllocator> &v) {
+        return dpct::device_vector<T, Allocator>::operator=(v);
+    }
+
+    void resize(size_type new_size, const T &x = T()) {
+        size_type old_size = dpct::device_vector<T, Allocator>::size();
+        dpct::device_vector<T, Allocator>::resize(new_size, x);
+        for (size_type i = old_size; i < new_size; i++) {
+            dpct::device_vector<T, Allocator>::operator[](i) = x;
+        }
+    }
+};

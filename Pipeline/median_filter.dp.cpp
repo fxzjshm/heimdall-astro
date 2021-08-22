@@ -13,27 +13,18 @@
 
 #include <dpct/dpl_utils.hpp>
 
-/* DPCT_ORIG #include <thrust/device_ptr.h>*/
-
-/* DPCT_ORIG #include <thrust/transform.h>*/
-
-/* DPCT_ORIG #include <thrust/adjacent_difference.h>*/
-
-/* DPCT_ORIG #include <thrust/iterator/counting_iterator.h>*/
-
 /*
   Note: The implementations of median3-5 here can be derived from
           'sorting networks'.
  */
 
-/* DPCT_ORIG inline __host__ __device__*/
 inline float median3(float a, float b, float c) {
         return a < b ? b < c ? b
 	                      : a < c ? c : a
 	             : a < c ? a
 	                     : b < c ? c : b;
 }
-/* DPCT_ORIG inline __host__ __device__*/
+
 inline float median4(float a, float b, float c, float d) {
         return a < c ? b < d ? a < b ? c < d ? 0.5f*(b+c) : 0.5f*(b+d)
 	                             : c < d ? 0.5f*(a+c) : 0.5f*(a+d)
@@ -44,7 +35,7 @@ inline float median4(float a, float b, float c, float d) {
 	                     : c < d ? a < b ? 0.5f*(d+a) : 0.5f*(b+d)
 	                             : a < b ? 0.5f*(a+c) : 0.5f*(c+b);
 }
-/* DPCT_ORIG inline __host__ __device__*/
+
 inline float median5(float a, float b, float c, float d, float e) {
         // Note: This wicked code is by 'DRBlaise' and was found here:
 	//         http://stackoverflow.com/a/2117018
@@ -134,9 +125,9 @@ struct median_scrunch3_kernel {
     const hd_float* in;
 	median_scrunch3_kernel(const hd_float* in_)
 		: in(in_) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
-        inline hd_float operator()(unsigned int i) const {
-                hd_float a = in[3*i+0];
+
+    inline hd_float operator()(unsigned int i) const {
+        hd_float a = in[3*i+0];
 		hd_float b = in[3*i+1];
 		hd_float c = in[3*i+2];
 		return median3(a, b, c);
@@ -147,7 +138,7 @@ struct median_scrunch5_kernel {
     const hd_float* in;
 	median_scrunch5_kernel(const hd_float* in_)
 		: in(in_) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
+
         inline hd_float operator()(unsigned int i) const {
                 hd_float a = in[5*i+0];
 		hd_float b = in[5*i+1];
@@ -163,7 +154,7 @@ struct median_scrunch3_array_kernel {
 	const hd_size   size;
 	median_scrunch3_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
+
         inline hd_float operator()(unsigned int i) const {
                 hd_size array = i / size;
 		hd_size j     = i % size;
@@ -180,7 +171,7 @@ struct median_scrunch5_array_kernel {
 	const hd_size   size;
 	median_scrunch5_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
+
         inline hd_float operator()(unsigned int i) const {
                 hd_size array = i / size;
 		hd_size j     = i % size;
@@ -198,15 +189,13 @@ hd_error median_filter3(const hd_float* d_in,
                         hd_size         count,
                         hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
+
         dpct::device_pointer<hd_float> d_out_begin(d_out);
         using dpct::make_counting_iterator;
-/* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
+
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
                        dpct::make_counting_iterator<unsigned int>(0),
-                       /* DPCT_ORIG make_counting_iterator<unsigned
-                          int>(count),*/
                        dpct::make_counting_iterator<unsigned int>(count),
                        d_out_begin, median_filter3_kernel(d_in, count));
         return HD_NO_ERROR;
@@ -266,12 +255,10 @@ hd_error median_scrunch5(const hd_float* d_in,
                          hd_size         count,
                          hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<const hd_float> d_in_begin(d_in);*/
-        dpct::device_pointer<const hd_float> d_in_begin(d_in);
-/* DPCT_ORIG 	thrust::device_ptr<hd_float>       d_out_begin(d_out);*/
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
+    dpct::device_pointer<const hd_float> d_in_begin(d_in);
+    dpct::device_pointer<hd_float> d_out_begin(d_out);
 
-        if( count == 1 ) {
+    if( count == 1 ) {
 		*d_out_begin = d_in_begin[0];
 	}
 	else if( count == 2 ) {
@@ -292,14 +279,9 @@ hd_error median_scrunch5(const hd_float* d_in,
 		// Note: Truncating here is necessary
 		hd_size out_count = count / 5;
 		using dpct::make_counting_iterator;
-/* DPCT_ORIG 		thrust::transform(make_counting_iterator<unsigned
- * int>(0),*/
-                std::transform(
-                    oneapi::dpl::execution::make_device_policy(
-                        dpct::get_default_queue()),
+        std::transform(
+                    oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
                     dpct::make_counting_iterator<unsigned int>(0),
-                    /* DPCT_ORIG make_counting_iterator<unsigned
-                       int>(out_count),*/
                     dpct::make_counting_iterator<unsigned int>(out_count),
                     d_out_begin, median_scrunch5_kernel(d_in));
         }
@@ -319,12 +301,9 @@ hd_error median_scrunch3_array(const hd_float* d_in,
 	hd_size out_count = count / 3;
 	hd_size total     = array_size * out_count;
 	using dpct::make_counting_iterator;
-/* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
                        dpct::make_counting_iterator<unsigned int>(0),
-                       /* DPCT_ORIG make_counting_iterator<unsigned
-                          int>(total),*/
                        dpct::make_counting_iterator<unsigned int>(total),
                        d_out_begin,
                        median_scrunch3_array_kernel(d_in, array_size));
@@ -338,18 +317,14 @@ hd_error median_scrunch5_array(const hd_float* d_in,
                                hd_size         count,
                                hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
-        // Note: Truncating here is necessary
+    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    // Note: Truncating here is necessary
 	hd_size out_count = count / 5;
 	hd_size total     = array_size * out_count;
 	using dpct::make_counting_iterator;
-/* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
         std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
                        dpct::make_counting_iterator<unsigned int>(0),
-                       /* DPCT_ORIG make_counting_iterator<unsigned
-                          int>(total),*/
                        dpct::make_counting_iterator<unsigned int>(total),
                        d_out_begin,
                        median_scrunch5_array_kernel(d_in, array_size));
@@ -364,24 +339,15 @@ has been deprecated in C++11. You may need to remove references to typedefs from
 thrust::binary_function in the class definition.
 */
 struct mean2_functor {
-/* DPCT_ORIG 	inline __host__ __device__*/
         inline T operator()(T a, T b) const { return (T)0.5 * (a + b); }
 };
 
-struct mean_scrunch2_array_kernel
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:56: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct mean_scrunch2_array_kernel {
+    const hd_float* in;
 	const hd_size   size;
 	mean_scrunch2_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
-        inline hd_float operator()(unsigned int i) const {
+    inline hd_float operator()(unsigned int i) const {
                 hd_size array = i / size;
 		hd_size j     = i % size;
 		
@@ -396,16 +362,15 @@ hd_error mean_filter2(const hd_float* d_in,
                       hd_size         count,
                       hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<const hd_float> d_in_begin(d_in);*/
         dpct::device_pointer<const hd_float> d_in_begin(d_in);
-/* DPCT_ORIG 	thrust::device_ptr<hd_float>       d_out_begin(d_out);*/
         dpct::device_pointer<hd_float> d_out_begin(d_out);
         /*
         DPCT1007:57: Migration of this CUDA API is not supported by the Intel(R)
         DPC++ Compatibility Tool.
         */
-        std::adjacent_difference(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                                 d_in_begin, d_in_begin + count, d_out_begin,
+        std::adjacent_difference(// oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                                 // d_in_begin, d_in_begin + count, d_out_begin,
+                                 d_in, d_in + count, d_out,
                                  mean2_functor<hd_float>());
         return HD_NO_ERROR;
 }
@@ -415,32 +380,21 @@ hd_error mean_scrunch2_array(const hd_float* d_in,
                              hd_size         count,
                              hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
-        // Note: Truncating here is necessary
+    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    // Note: Truncating here is necessary
 	hd_size out_count = count / 2;
 	hd_size total     = array_size * out_count;
 	using dpct::make_counting_iterator;
-/* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
-        std::transform(oneapi::dpl::execution::make_device_policy(
+    std::transform(oneapi::dpl::execution::make_device_policy(
                            dpct::get_default_queue()),
                        dpct::make_counting_iterator<unsigned int>(0),
-                       /* DPCT_ORIG make_counting_iterator<unsigned
-                          int>(total),*/
                        dpct::make_counting_iterator<unsigned int>(total),
                        d_out_begin,
                        mean_scrunch2_array_kernel(d_in, array_size));
-        return HD_NO_ERROR;
+    return HD_NO_ERROR;
 }
 
 // suggested by Ewan Barr (2016 email)
-/* DPCT_ORIG struct linear_stretch_functor2: public
- * thrust::unary_function<hd_float,hd_float>*/
-/*
-DPCT1044:58: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
 struct linear_stretch_functor2 {
         const hd_float* in;
         unsigned in_size;
@@ -450,7 +404,6 @@ struct linear_stretch_functor2 {
         linear_stretch_functor2(const hd_float* in_, unsigned in_size, float step)
           : in(in_), in_size(in_size), step(step), correction(((int)(step/2))/step){}
 
-/* DPCT_ORIG         inline __host__ __device__*/
         inline hd_float operator()(unsigned out_idx) const
         {
                 float fidx = ((float)out_idx) / step - correction;
@@ -463,21 +416,13 @@ struct linear_stretch_functor2 {
         }
 };
 
-struct linear_stretch_functor
-/* DPCT_ORIG 	: public thrust::unary_function<hd_float,hd_float> {*/
-        /*
-DPCT1044:59: thrust::unary_function was removed because std::unary_function has
-been deprecated in C++11. You may need to remove references to typedefs from
-thrust::unary_function in the class definition.
-*/
-        {
-        const hd_float* in;
+struct linear_stretch_functor {
+    const hd_float* in;
 	hd_float        step;
 	linear_stretch_functor(const hd_float* in_,
 	                       hd_size in_count, hd_size out_count)
 		: in(in_), step(hd_float(in_count-1)/(out_count-1)) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
-        inline hd_float operator()(unsigned int i) const {
+    inline hd_float operator()(unsigned int i) const {
                 hd_float     x = i * step;
 		unsigned int j = x;
 		return in[j] + ((x-j > 1e-5) ? (x-j)*(in[j+1]-in[j]) : 0.f);
@@ -490,21 +435,16 @@ hd_error linear_stretch(const hd_float* d_in,
                         hd_size         out_count)
 {
 	using dpct::make_counting_iterator;
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
         dpct::device_pointer<hd_float> d_out_begin(d_out);
 
-        // Ewan found this code to contain a bug, and suggested the latter
+    // Ewan found this code to contain a bug, and suggested the latter
 	// thrust::transform(make_counting_iterator<unsigned int>(0),
 	//                   make_counting_iterator<unsigned int>(out_count),
 	//                   d_out_begin,
 	//                   linear_stretch_functor(d_in, in_count, out_count));
-/* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
-        std::transform(
-            oneapi::dpl::execution::make_device_policy(
-                dpct::get_default_queue()),
+    std::transform(
+            oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
             dpct::make_counting_iterator<unsigned int>(0),
-            /* DPCT_ORIG 	                  make_counting_iterator<unsigned
-               int>(out_count),*/
             dpct::make_counting_iterator<unsigned int>(out_count), d_out_begin,
             linear_stretch_functor2(d_in, in_count,
                                     hd_float(out_count - 1) / (in_count - 1)));

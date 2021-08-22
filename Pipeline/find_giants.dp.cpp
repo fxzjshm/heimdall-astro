@@ -6,35 +6,16 @@
  ***************************************************************************/
 
 #include "hd/find_giants.h"
-#include "hd/utils.hpp"
 #include <CL/sycl.hpp>
 #include <dpct/dpct.hpp>
 #include <oneapi/dpl/iterator>
+#include "hd/utils.hpp"
 
 // TESTING only
 #include "hd/stopwatch.h"
 #include <iostream>
 //#define PRINT_BENCHMARKS
 
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
-
-/* DPCT_ORIG #include <thrust/count.h>*/
-
-/* DPCT_ORIG #include <thrust/copy.h>*/
-
-/* DPCT_ORIG #include <thrust/adjacent_difference.h>*/
-
-/* DPCT_ORIG #include <thrust/scan.h>*/
-
-/* DPCT_ORIG #include <thrust/binary_search.h>*/
-
-/* DPCT_ORIG #include <thrust/iterator/zip_iterator.h>*/
-
-/* DPCT_ORIG #include <thrust/iterator/counting_iterator.h>*/
-
-/* DPCT_ORIG #include <thrust/iterator/discard_iterator.h>*/
-
-/* DPCT_ORIG #include <thrust/iterator/retag.h>*/
 
 template <typename T> struct greater_than_val {
   T val;
@@ -68,30 +49,18 @@ template <typename T> struct plus_one {
 };
 
 class GiantFinder_impl {
-  /* DPCT_ORIG   thrust::device_vector<hd_float> d_giant_data;*/
-  dpct::device_vector<hd_float> d_giant_data;
-  /* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_data_inds;*/
-  dpct::device_vector<hd_size> d_giant_data_inds;
-  /* DPCT_ORIG   thrust::device_vector<int>      d_giant_data_segments;*/
-  dpct::device_vector<int> d_giant_data_segments;
-  /* DPCT_ORIG   thrust::device_vector<hd_size>  d_giant_data_seg_ids;*/
-  dpct::device_vector<hd_size> d_giant_data_seg_ids;
+  device_vector_wrapper<hd_float> d_giant_data;
+  device_vector_wrapper<hd_size> d_giant_data_inds;
+  device_vector_wrapper<int> d_giant_data_segments;
+  device_vector_wrapper<hd_size> d_giant_data_seg_ids;
 
 public:
   hd_error exec(const hd_float *d_data, hd_size count, hd_float thresh,
                 hd_size merge_dist,
-                /* DPCT_ORIG                 thrust::device_vector<hd_float>&
-                   d_giant_peaks,*/
-                dpct::device_vector<hd_float> &d_giant_peaks,
-                /* DPCT_ORIG                 thrust::device_vector<hd_size>&
-                   d_giant_inds,*/
-                dpct::device_vector<hd_size> &d_giant_inds,
-                /* DPCT_ORIG                 thrust::device_vector<hd_size>&
-                   d_giant_begins,*/
-                dpct::device_vector<hd_size> &d_giant_begins,
-                /* DPCT_ORIG                 thrust::device_vector<hd_size>&
-                   d_giant_ends) {*/
-                dpct::device_vector<hd_size> &d_giant_ends) {
+                device_vector_wrapper<hd_float> &d_giant_peaks,
+                device_vector_wrapper<hd_size> &d_giant_inds,
+                device_vector_wrapper<hd_size> &d_giant_begins,
+                device_vector_wrapper<hd_size> &d_giant_ends) {
     // This algorithm works by extracting all samples in the time series
     //   above thresh (the giant_data), segmenting those samples into
     //   isolated giants (based on merge_dist), and then computing the
@@ -102,13 +71,9 @@ public:
     using oneapi::dpl::copy_if;
     using oneapi::dpl::make_zip_iterator;
 
-    /* DPCT_ORIG     typedef thrust::device_ptr<const hd_float>
-     * const_float_ptr;*/
     typedef dpct::device_pointer<const hd_float> const_float_ptr;
     // typedef thrust::system::cuda::pointer<const hd_float> const_float_ptr;
-    /* DPCT_ORIG     typedef thrust::device_ptr<hd_float> float_ptr;*/
     typedef dpct::device_pointer<hd_float> float_ptr;
-    /* DPCT_ORIG     typedef thrust::device_ptr<hd_size> size_ptr;*/
     typedef dpct::device_pointer<hd_size> size_ptr;
 
     const_float_ptr d_data_begin(d_data);
@@ -127,10 +92,6 @@ public:
     // Quickly count how much giant data there is so we know the space needed
     /* DPCT_ORIG     hd_size giant_data_count =
      * thrust::count_if(thrust::retag<my_tag>(d_data_begin),*/
-    /*
-    DPCT1007:18: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
     hd_size giant_data_count = std::count_if(
         oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
         d_data_begin, d_data_end, greater_than_val<hd_float>(thresh));
@@ -170,43 +131,25 @@ public:
         /* DPCT_ORIG
            copy_if(make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
                                                    make_counting_iterator(0u))),*/
-        /*
-        DPCT1007:20: Migration of this CUDA API is not supported by the Intel(R)
-        DPC++ Compatibility Tool.
-        */
         dpct::copy_if(
-            oneapi::dpl::execution::make_device_policy(
-                dpct::get_default_queue()),
+            oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
             oneapi::dpl::make_zip_iterator(d_data_begin,
                                            make_counting_iterator(0u)),
             /* DPCT_ORIG
                make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
                                                        make_counting_iterator(0u)))+count,*/
-            /*
-            DPCT1007:21: Migration of this CUDA API is not supported by the
-            Intel(R) DPC++ Compatibility Tool.
-            */
             oneapi::dpl::make_zip_iterator(d_data_begin,
-                                           make_counting_iterator(0u)) +
-                count,
+                                           make_counting_iterator(0u)) + count,
             (d_data_begin), // the stencil
                             /* DPCT_ORIG
                                make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
                                                                        thrust::retag<my_tag>(d_giant_data_inds.begin()))),*/
-            /*
-            DPCT1007:22: Migration of this CUDA API is not supported by the
-            Intel(R) DPC++ Compatibility Tool.
-            */
             oneapi::dpl::make_zip_iterator(d_giant_data.begin(),
                                            d_giant_data_inds.begin()),
             greater_than_val<hd_float>(thresh))
         /* DPCT_ORIG       -
            make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
                                              thrust::retag<my_tag>(d_giant_data_inds.begin())));*/
-        /*
-        DPCT1007:24: Migration of this CUDA API is not supported by the Intel(R)
-        DPC++ Compatibility Tool.
-        */
         - oneapi::dpl::make_zip_iterator(d_giant_data.begin(),
                                          d_giant_data_inds.begin());
 
@@ -232,17 +175,9 @@ public:
     DPC++ Compatibility Tool.
     */
     std::adjacent_difference(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
         d_giant_data_inds.begin(),
-        /*
-        DPCT1007:28: Migration of this CUDA API is not supported by the Intel(R)
-        DPC++ Compatibility Tool.
-        */
         d_giant_data_inds.end(),
-        /*
-        DPCT1007:29: Migration of this CUDA API is not supported by the Intel(R)
-        DPC++ Compatibility Tool.
-        */
         d_giant_data_segments.begin(), not_nearby<hd_size>(merge_dist));
 
     // hd_size giant_count_quick = thrust::count(d_giant_data_segments.begin(),
@@ -268,17 +203,9 @@ public:
     DPC++ Compatibility Tool.
     */
     std::inclusive_scan(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
         d_giant_data_segments.begin(),
-        /*
-        DPCT1007:32: Migration of this CUDA API is not
-        supported by the Intel(R) DPC++ Compatibility Tool.
-        */
         d_giant_data_segments.end(),
-        /*
-        DPCT1007:33: Migration of this CUDA API is not
-        supported by the Intel(R) DPC++ Compatibility Tool.
-        */
         d_giant_data_seg_ids.begin());
 
     // We extract the number of giants from the end of the exclusive scan
@@ -326,26 +253,14 @@ public:
     hd_size giant_count2 =
         /* DPCT_ORIG
            reduce_by_key(thrust::retag<my_tag>(d_giant_data_inds.begin()), */
-        /*
-        DPCT1007:34: Migration of this CUDA API is not supported by the Intel(R)
-        DPC++ Compatibility Tool.
-        */
         // oneapi::dpl::reduce_by_key(
         third_party::reduce_by_key(
             // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
             d_giant_data_inds.begin(), // the keys
-            /*
-            DPCT1007:35: Migration of this CUDA API is not supported by the
-            Intel(R) DPC++ Compatibility Tool.
-            */
             d_giant_data_inds.end(),
             /* DPCT_ORIG
                make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
                                                              thrust::retag<my_tag>(d_giant_data_inds.begin()))),*/
-            /*
-            DPCT1007:36: Migration of this CUDA API is not supported by the
-            Intel(R) DPC++ Compatibility Tool.
-            */
             oneapi::dpl::make_zip_iterator(d_giant_data.begin(),
                                            d_giant_data_inds.begin()),
             /* DPCT_ORIG                     thrust::make_discard_iterator(), */
@@ -353,10 +268,6 @@ public:
                                              /* DPCT_ORIG
                                                 make_zip_iterator(make_tuple(thrust::retag<my_tag>(new_giant_peaks_begin),
                                                                                               thrust::retag<my_tag>(new_giant_inds_begin))),*/
-            /*
-            DPCT1007:38: Migration of this CUDA API is not supported by the
-            Intel(R) DPC++ Compatibility Tool.
-            */
             oneapi::dpl::make_zip_iterator(new_giant_peaks_begin,
                                            new_giant_inds_begin),
             nearby<hd_size>(merge_dist),
@@ -365,10 +276,6 @@ public:
             /* DPCT_ORIG       .second -
                make_zip_iterator(make_tuple(thrust::retag<my_tag>(new_giant_peaks_begin),
                                                          thrust::retag<my_tag>(new_giant_inds_begin)));*/
-            /*
-            DPCT1007:40: Migration of this CUDA API is not supported by the
-            Intel(R) DPC++ Compatibility Tool.
-            */
             .second -
         oneapi::dpl::make_zip_iterator(new_giant_peaks_begin,
                                        new_giant_inds_begin);
@@ -431,21 +338,14 @@ public:
 };
 
 // Public interface (wrapper for implementation)
-GiantFinder::GiantFinder() : m_impl(new GiantFinder_impl) {}
+GiantFinder::GiantFinder()
+  : m_impl(new GiantFinder_impl) {}
 hd_error GiantFinder::exec(const hd_float *d_data, hd_size count,
                            hd_float thresh, hd_size merge_dist,
-                           /* DPCT_ORIG thrust::device_vector<hd_float>&
-                              d_giant_peaks,*/
-                           dpct::device_vector<hd_float> &d_giant_peaks,
-                           /* DPCT_ORIG thrust::device_vector<hd_size>&
-                              d_giant_inds,*/
-                           dpct::device_vector<hd_size> &d_giant_inds,
-                           /* DPCT_ORIG thrust::device_vector<hd_size>&
-                              d_giant_begins,*/
-                           dpct::device_vector<hd_size> &d_giant_begins,
-                           /* DPCT_ORIG thrust::device_vector<hd_size>&
-                              d_giant_ends) {*/
-                           dpct::device_vector<hd_size> &d_giant_ends) {
+                           device_vector_wrapper<hd_float> &d_giant_peaks,
+                           device_vector_wrapper<hd_size> &d_giant_inds,
+                           device_vector_wrapper<hd_size> &d_giant_begins,
+                           device_vector_wrapper<hd_size> &d_giant_ends) {
   return m_impl->exec(d_data, count, thresh, merge_dist, d_giant_peaks,
                       d_giant_inds, d_giant_begins, d_giant_ends);
 }

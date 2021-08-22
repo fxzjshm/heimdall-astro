@@ -15,24 +15,20 @@
 
 /* DPCT_ORIG #include <thrust/device_vector.h>*/
 #include <dpct/dpl_utils.hpp>
+#include "hd/utils.hpp"
 #include <cmath>
 
 class RemoveBaselinePlan_impl {
-/* DPCT_ORIG 	thrust::device_vector<hd_float> buf1;*/
-        dpct::device_vector<hd_float> buf1;
-/* DPCT_ORIG 	thrust::device_vector<hd_float> buf2;*/
-        dpct::device_vector<hd_float> buf2;
-/* DPCT_ORIG 	thrust::device_vector<hd_float> baseline;*/
-        dpct::device_vector<hd_float> baseline;
+        device_vector_wrapper<hd_float> buf1;
+        device_vector_wrapper<hd_float> buf2;
+        device_vector_wrapper<hd_float> baseline;
 
 public:
 	hd_error exec(hd_float* d_data, hd_size count,
 	              hd_size smooth_radius) {
+        dpct::device_pointer<hd_float> d_data_begin(d_data);
 
-/* DPCT_ORIG 		thrust::device_ptr<hd_float> d_data_begin(d_data);*/
-                dpct::device_pointer<hd_float> d_data_begin(d_data);
-
-                // This algorithm works by scrunching the data down to a time resolution
+        // This algorithm works by scrunching the data down to a time resolution
 		//   representative of the desired smoothing length and then stretching
 		//   it back out again. The scrunching is done using the median-of-5
 		//   to ensure robustness against outliers (e.g., strong RFI spikes).
@@ -50,19 +46,14 @@ public:
 	
 		// As we will use median-of-5, round to sample_count times a power of five
 		hd_size nscrunches  = (hd_size)(log(count/sample_count)/log(5.));
-/* DPCT_ORIG 		hd_size count_round = pow(5.,nscrunches)*sample_count;*/
-                hd_size count_round = sycl::pow<double>(5., nscrunches) * sample_count;
+        hd_size count_round = sycl::pow<double>(5., nscrunches) * sample_count;
 
-                buf1.resize(count_round);
+        buf1.resize(count_round);
 		buf2.resize(count_round/5);
-/* DPCT_ORIG 		hd_float* buf1_ptr =
- * thrust::raw_pointer_cast(&buf1[0]);*/
-                hd_float *buf1_ptr = dpct::get_raw_pointer(&buf1[0]);
-/* DPCT_ORIG 		hd_float* buf2_ptr =
- * thrust::raw_pointer_cast(&buf2[0]);*/
-                hd_float *buf2_ptr = dpct::get_raw_pointer(&buf2[0]);
+        hd_float *buf1_ptr = dpct::get_raw_pointer(&buf1[0]);
+        hd_float *buf2_ptr = dpct::get_raw_pointer(&buf2[0]);
 
-                // First we re-sample to the rounded size
+        // First we re-sample to the rounded size
 		linear_stretch(d_data, count, buf1_ptr, count_round);
 	
 		// Then we median scrunch until we reach the sample size
@@ -71,23 +62,19 @@ public:
 			std::swap(buf1_ptr, buf2_ptr);
 		}
 		// Note: Output is now at buf1_ptr
-/* DPCT_ORIG 		thrust::device_ptr<hd_float> buf1_begin(buf1_ptr);*/
-                dpct::device_pointer<hd_float> buf1_begin(buf1_ptr);
-/* DPCT_ORIG 		thrust::device_ptr<hd_float> buf2_begin(buf2_ptr);*/
-                dpct::device_pointer<hd_float> buf2_begin(buf2_ptr);
+        dpct::device_pointer<hd_float> buf1_begin(buf1_ptr);
+        dpct::device_pointer<hd_float> buf2_begin(buf2_ptr);
 
-                // Then we need to extrapolate the ends
+        // Then we need to extrapolate the ends
 		linear_stretch(buf1_ptr, sample_count, buf2_ptr+1, sample_count*2);
 		buf2_begin[0]                = 2*buf2_begin[1] - buf2_begin[2];
 		buf2_begin[sample_count*2+1] = (2*buf2_begin[sample_count*2] -
 		                                buf2_begin[sample_count*2-1]);
 	
 		baseline.resize(count);
-/* DPCT_ORIG 		hd_float* baseline_ptr =
- * thrust::raw_pointer_cast(&baseline[0]);*/
-                hd_float *baseline_ptr = dpct::get_raw_pointer(&baseline[0]);
+        hd_float *baseline_ptr = dpct::get_raw_pointer(&baseline[0]);
 
-                // And finally we stretch back to the original length
+        // And finally we stretch back to the original length
 		linear_stretch(buf2_ptr, sample_count*2+2, baseline_ptr, count);
 	
 		// TESTING
@@ -95,13 +82,10 @@ public:
 		//write_device_time_series(baseline_ptr, count, 1.f, "thebaseline.tim");
 	
 		// Now we just subtract it off
-/* DPCT_ORIG 		thrust::transform(d_data_begin, d_data_begin+count,*/
-                std::transform(
-                    oneapi::dpl::execution::make_device_policy(
-                        dpct::get_default_queue()),
+        std::transform(
+                    oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
                     d_data_begin, d_data_begin + count, baseline.begin(),
                     d_data_begin,
-                    /* DPCT_ORIG thrust::minus<hd_float>());*/
                     std::minus<hd_float>());
 
                 //write_device_time_series(d_data, count, 1.f, "post_baseline.tim");

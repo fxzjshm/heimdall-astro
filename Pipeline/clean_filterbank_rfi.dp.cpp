@@ -207,10 +207,10 @@ hd_error zap_filterbank_rfi(const int* h_mask, const hd_byte* h_in,
   // TODO: Tidy this up. Could possibly pass device arrays rather than host.
   
   // Copy filterbank data to the device
-  dpct::device_vector<WordType> d_in((WordType *)h_in,
+  device_vector_wrapper<WordType> d_in((WordType *)h_in,
                                      (WordType *)h_in + nsamps * stride);
-  dpct::device_vector<WordType> d_out(nsamps * stride);
-  dpct::device_vector<int> d_mask(h_mask, h_mask + nsamps);
+  device_vector_wrapper<WordType> d_out(nsamps * stride);
+  device_vector_wrapper<int> d_mask(h_mask, h_mask + nsamps);
   WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
   int *d_mask_ptr = dpct::get_raw_pointer(&d_mask[0]);
   std::transform(
@@ -265,13 +265,13 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   
   typedef hd_float out_type;
   std::vector<out_type>           h_raw_series;
-  dpct::device_vector<hd_float> d_series;
+  device_vector_wrapper<hd_float> d_series;
   //thrust::host_vector<hd_float>   h_series;
-  dpct::device_vector<hd_float> d_filtered;
+  device_vector_wrapper<hd_float> d_filtered;
   //thrust::host_vector<hd_float>   h_beams_series;
   //thrust::device_vector<hd_float> d_beams_series;
-  dpct::device_vector<int> d_filtered_rfi_mask;
-  dpct::device_vector<int> d_rfi_mask;
+  device_vector_wrapper<int> d_filtered_rfi_mask;
+  device_vector_wrapper<int> d_rfi_mask;
   std::vector<int> h_rfi_mask;
 
   hd_size nchans = dedisp_get_channel_count(main_plan);
@@ -283,11 +283,11 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   hd_size stride = nchans * nbits/8 / sizeof(WordType);
   
   // TODO: Any way to avoid having to use this?
-  dpct::device_vector<WordType> d_in((WordType *)h_in,
+  device_vector_wrapper<WordType> d_in((WordType *)h_in,
                                      (WordType *)h_in + nsamps * stride);
   WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
 
-  dpct::device_vector<hd_float> d_bandpass(nchans);
+  device_vector_wrapper<hd_float> d_bandpass(nchans);
   hd_float *d_bandpass_ptr = dpct::get_raw_pointer(&d_bandpass[0]);
 
   // Narrow-band RFI is not an issue when nbits is small
@@ -444,7 +444,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       third_party::counting_iterator<hd_float> 
         norm_val_iter(1.0 / sqrt((hd_float)filter_width));
       std::transform(
-          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+          std::execution::par,
           d_filtered.begin(), d_filtered.end(), norm_val_iter,
           d_filtered.begin(),
           std::multiplies<hd_float>());
