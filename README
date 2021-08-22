@@ -1,1 +1,13 @@
+This is a fork of https://sourceforge.net/p/heimdall-astro
+
+WARNING: the result is quite different from original version, not sure whether the compiler or DPCT library should be responsible for this. (See commit 4d94810)
+
+Currently `sycl` branch only support Intel's OneAPI (waiting for more implementations of SYCL 2020 and a substitution of dpct).
+Run `./configure` with prefix `CC=dpcpp CXX=dpcpp` to build.
+
+Original wiki is at https://sourceforge.net/p/heimdall-astro/wiki/Home/
+Below is the original README
+
+------------
+
 Readme file
