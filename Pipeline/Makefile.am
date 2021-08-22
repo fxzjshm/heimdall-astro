@@ -12,7 +12,7 @@ AM_CPPFLAGS = -I$(top_srcdir) \
 	      -I$(top_srcdir)/Network \
 	      -I$(top_srcdir)/Formats \
 		  -I$(top_srcdir)/3rdparty/SYCL-PRNG/include \
-	      @DEDISP_CFLAGS@ @THRUST_CFLAGS@ @CUDA_CFLAGS@ $(BOOST_CPPFLAGS)
+	      @DEDISP_CFLAGS@ $(BOOST_CPPFLAGS)
 
 include $(top_srcdir)/config/Makefile.targets
 
