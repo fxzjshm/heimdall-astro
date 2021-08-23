@@ -6,21 +6,8 @@
  ***************************************************************************/
 
 #include "hd/merge_candidates.h"
-
-// see https://community.intel.com/t5/Intel-oneAPI-Threading-Building/tbb-task-has-not-been-declared/m-p/1255725#M14806
-#if defined(_GLIBCXX_RELEASE) && 9 <=_GLIBCXX_RELEASE && _GLIBCXX_RELEASE <= 10
-#define PSTL_USE_PARALLEL_POLICIES 0
-#define _GLIBCXX_USE_TBB_PAR_BACKEND 0
-#define _PSTL_PAR_BACKEND_SERIAL
-#endif
-
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
-
-#include <dpct/dpl_utils.hpp>
 #include "hd/utils.hpp"
+#include <boost/compute.hpp>
 
 typedef std::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
 
@@ -78,15 +65,13 @@ hd_error merge_candidates(hd_size count,
 
     size_iterator labels_begin(d_labels);
 
-    // TODO: fix for tuple not supporting non-const iterators
-    RawCandidates d_cands_non_const = *((RawCandidates *)(&d_cands));
-    float_iterator cand_peaks_begin(d_cands_non_const.peaks);
-    size_iterator cand_inds_begin(d_cands_non_const.inds);
-    size_iterator cand_begins_begin(d_cands_non_const.begins);
-    size_iterator cand_ends_begin(d_cands_non_const.ends);
-    size_iterator cand_filter_inds_begin(d_cands_non_const.filter_inds);
-    size_iterator cand_dm_inds_begin(d_cands_non_const.dm_inds);
-    size_iterator cand_members_begin(d_cands_non_const.members);
+    float_iterator cand_peaks_begin(d_cands.peaks);
+    size_iterator cand_inds_begin(d_cands.inds);
+    size_iterator cand_begins_begin(d_cands.begins);
+    size_iterator cand_ends_begin(d_cands.ends);
+    size_iterator cand_filter_inds_begin(d_cands.filter_inds);
+    size_iterator cand_dm_inds_begin(d_cands.dm_inds);
+    size_iterator cand_members_begin(d_cands.members);
 
     float_iterator group_peaks_begin(d_groups.peaks);
     size_iterator group_inds_begin(d_groups.inds);
@@ -97,57 +82,31 @@ hd_error merge_candidates(hd_size count,
     size_iterator group_members_begin(d_groups.members);
 
     // Sort by labels and remember permutation
-    device_vector_wrapper<hd_size> d_permutation(count);
-    /* DPCT_ORIG 	thrust::sequence(d_permutation.begin(), d_permutation.end());*/
-    dpct::iota(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-               d_permutation.begin(), d_permutation.end());
-    /* DPCT_ORIG 	thrust::sort_by_key(labels_begin, labels_begin + count,*/
-    dpct::sort(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-               labels_begin, labels_begin + count, d_permutation.begin());
+    boost::compute::vector<hd_size> d_permutation(count);
+    boost::compute::iota(d_permutation.begin(), d_permutation.end(), 0);
+    boost::compute::sort(labels_begin, labels_begin + count, d_permutation.begin());
 
     // Merge giants into groups according to the label
-    /* DPCT_ORIG 	reduce_by_key(labels_begin, labels_begin + count,*/
-    // oneapi::dpl::reduce_by_segment(
-    // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-    third_party::reduce_by_key(
+    boost::compute::reduce_by_key(
         labels_begin, labels_begin + count,
-        /* DPCT_ORIG 	              make_permutation_iterator(*/
-        oneapi::dpl::make_permutation_iterator(
-            /* DPCT_ORIG
-                   make_zip_iterator(thrust::make_tuple(cand_peaks_begin,
-                                                                               cand_inds_begin,
-                                                                               cand_begins_begin,
-                                                                               cand_ends_begin,
-                                                                               cand_filter_inds_begin,
-                                                                               cand_dm_inds_begin,
-                                                                               cand_members_begin)),*/
-            oneapi::dpl::make_zip_iterator(cand_peaks_begin,
-                                           cand_inds_begin,
-                                           cand_begins_begin,
-                                           cand_ends_begin,
-                                           cand_filter_inds_begin,
-                                           cand_dm_inds_begin,
-                                           cand_members_begin),
+        boost::compute::make_permutation_iterator(
+            boost::compute::make_zip_iterator(boost::make_tuple(cand_peaks_begin,
+                                                                cand_inds_begin,
+                                                                cand_begins_begin,
+                                                                cand_ends_begin,
+                                                                cand_filter_inds_begin,
+                                                                cand_dm_inds_begin,
+                                                                cand_members_begin)),
             d_permutation.begin()),
-        /* DPCT_ORIG 	              thrust::make_discard_iterator(),
-             */
-        oneapi::dpl::discard_iterator(), // keys output
-                                         /* DPCT_ORIG
-                                         make_zip_iterator(thrust::make_tuple(group_peaks_begin,
-                                                                                                 group_inds_begin,
-                                                                                                 group_begins_begin,
-                                                                                                 group_ends_begin,
-                                                                                                 group_filter_inds_begin,
-                                                                                                 group_dm_inds_begin,
-                                                                                                 group_members_begin)),*/
-        oneapi::dpl::make_zip_iterator(group_peaks_begin,
-                                       group_inds_begin,
-                                       group_begins_begin,
-                                       group_ends_begin,
-                                       group_filter_inds_begin,
-                                       group_dm_inds_begin,
-                                       group_members_begin),
-        std::equal_to<hd_size>(), merge_candidates_functor());
+        boost::compute::discard_iterator(), // keys output
+        boost::compute::make_zip_iterator(boost::make_tuple(group_peaks_begin,
+                                                            group_inds_begin,
+                                                            group_begins_begin,
+                                                            group_ends_begin,
+                                                            group_filter_inds_begin,
+                                                            group_dm_inds_begin,
+                                                            group_members_begin)),
+        boost::compute::equal_to<hd_size>(), merge_candidates_functor());
 
     return HD_NO_ERROR;
 }

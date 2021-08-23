@@ -15,28 +15,19 @@
 
 // TODO: Add error checking to the methods in here
 template <typename T> class MatchedFilterPlan_impl {
-  device_vector_wrapper<T> m_scanned;
+  boost::compute::vector<T> m_scanned;
   hd_size m_max_width;
 
 public:
   hd_error prep(const T *d_in, hd_size count, hd_size max_width) {
     m_max_width = max_width;
-    // dpct::device_pointer<const T> d_in_begin(d_in);
-    // dpct::device_pointer<const T> d_in_end(d_in + count);
-    dpct::device_pointer<T> d_in_begin(const_cast<T*>(d_in));
-    dpct::device_pointer<T> d_in_end(const_cast<T*>(d_in + count));
+    dpct::device_pointer<const T> d_in_begin(d_in);
+    dpct::device_pointer<const T> d_in_end(d_in + count);
 
     // Note: One extra element so that we include the final value
     m_scanned.resize(count + 1, 0);
-    /*
-    DPCT1007:10: Migration of this CUDA API is not supported by the
-    Intel(R) DPC++ Compatibility Tool.
-    */
-   // TODO check if this work
-    std::inclusive_scan(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        d_in_begin, d_in_end, m_scanned.begin() + 1);
-        // d_in, d_in + count, m_scanned.begin() + 1);
+
+    boost::compute::inclusive_scan(d_in_begin, d_in_end, m_scanned.begin() + 1);
     return HD_NO_ERROR;
   }
 
@@ -67,13 +58,9 @@ public:
         m_scanned.begin() + offset - behind,
         m_scanned.begin() + offset - behind + out_count, stride);
 
-    /* DPCT_ORIG 		thrust::transform(in_range1.begin(),
-     * in_range1.end(),*/
-    std::transform(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+    boost::compute::transform(
         in_range1.begin(), in_range1.end(), in_range2.begin(), d_out_begin,
-        /* DPCT_ORIG thrust::minus<T>());*/
-        std::minus<T>());
+        boost::compute::minus<T>());
 
     return HD_NO_ERROR;
   }

@@ -5,13 +5,9 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "hd/get_rms.h"
 #include "hd/median_filter.h"
-#include <dpct/dpl_utils.hpp>
+#include <boost/compute.hpp>
 #include "hd/utils.hpp"
 
 template <typename T>
@@ -20,8 +16,8 @@ struct absolute_val {
 };
 
 class GetRMSPlan_impl {
-        device_vector_wrapper<hd_float> buf1;
-        device_vector_wrapper<hd_float> buf2;
+    boost::compute::vector<hd_float> buf1;
+    boost::compute::vector<hd_float> buf2;
 
 public:
 	hd_float exec(hd_float* d_data, hd_size count) {
@@ -41,10 +37,8 @@ public:
  * thrust::raw_pointer_cast(&buf2[0]);*/
         hd_float *buf2_ptr = dpct::get_raw_pointer(&buf2[0]);
 
-/* DPCT_ORIG 		thrust::transform(d_data_begin, d_data_begin+count,*/
-        std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                               d_data_begin, d_data_begin + count, buf1.begin(),
-                               absolute_val<hd_float>());
+        boost::compute::transform(d_data_begin, d_data_begin + count, buf1.begin(),
+                               boost::compute::absolute_val<hd_float>());
 
         for( hd_size size=count; size>1; size/=5 ) {
 			median_scrunch5(buf1_ptr, size, buf2_ptr);
@@ -79,16 +73,10 @@ hd_error normalise(hd_float* d_data, hd_size count)
         dpct::device_pointer<hd_float> d_data_end(d_data + count);
 
         hd_float rms = get_rms(d_data, count);
-        /* DPCT_ORIG 	thrust::transform(d_data_begin, d_data_end,*/
-        std::transform(// oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                           std::execution::par,
-                           d_data_begin, d_data_end,
-                           /* DPCT_ORIG
-                          thrust::make_constant_iterator(hd_float(1.0)/rms),*/
-                           dpct::make_constant_iterator(hd_float(1.0) / rms),
+        boost::compute::transform(d_data_begin, d_data_end,
+                           boost::compute::make_constant_iterator(hd_float(1.0) / rms),
                            d_data_begin,
-                           /* DPCT_ORIG thrust::multiplies<hd_float>());*/
-                           std::multiplies<hd_float>());
+                           boost::compute::multiplies<hd_float>());
 
         return HD_NO_ERROR;
 }

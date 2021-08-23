@@ -5,17 +5,12 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
-
 #include <vector>
 #include <string>
 using std::string;
 #include <fstream>
 
-#include <dpct/dpl_utils.hpp>
+#include <boost/compute.hpp>
 
 namespace detail {
 // TODO: These were copied from header.hpp. Not sure if this is a good idea.

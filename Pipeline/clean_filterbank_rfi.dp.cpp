@@ -5,10 +5,7 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
+#include <boost/compute.hpp>
 
 #include "hd/clean_filterbank_rfi.h"
 #include "hd/remove_baseline.h"
@@ -22,7 +19,6 @@
 #ifdef HAVE_MPI
 #include <mpi.h>
 #endif
-#include <dpct/dpl_utils.hpp>
 #include <cmath>
 
 // TESTING ONLY
@@ -43,7 +39,6 @@ template <typename T>
 struct abs_less_than {
   T thresh;
   abs_less_than(T thresh_) : thresh(thresh_) {}
-/* DPCT_ORIG   inline __host__ __device__*/
   inline bool operator()(T x) const {
     return fabs(x) < thresh;
   }
@@ -207,23 +202,20 @@ hd_error zap_filterbank_rfi(const int* h_mask, const hd_byte* h_in,
   // TODO: Tidy this up. Could possibly pass device arrays rather than host.
   
   // Copy filterbank data to the device
-  device_vector_wrapper<WordType> d_in((WordType *)h_in,
+  boost::compute::vector<WordType> d_in((WordType *)h_in,
                                      (WordType *)h_in + nsamps * stride);
-  device_vector_wrapper<WordType> d_out(nsamps * stride);
-  device_vector_wrapper<int> d_mask(h_mask, h_mask + nsamps);
+  boost::compute::vector<WordType> d_out(nsamps * stride);
+  boost::compute::vector<int> d_mask(h_mask, h_mask + nsamps);
   WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
   int *d_mask_ptr = dpct::get_raw_pointer(&d_mask[0]);
-  std::transform(
-      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-      oneapi::dpl::counting_iterator<unsigned int>(0),
-      oneapi::dpl::counting_iterator<unsigned int>(nsamps * stride),
+  boost::compute::transform(
+      boost::compute::counting_iterator<unsigned int>(0),
+      boost::compute::counting_iterator<unsigned int>(nsamps * stride),
       d_out.begin(),
       zap_fb_rfi_functor<WordType>(d_mask_ptr, d_in_ptr, stride, nbits, nsamps,
                                    max_resample_dist));
   // Copy back to the host
-  std::copy(
-      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-      d_out.begin(), d_out.end(), (WordType *)h_out);
+  boost::compute::copy(d_out.begin(), d_out.end(), (WordType *)h_out);
 
   return HD_NO_ERROR;
 }
@@ -265,13 +257,13 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   
   typedef hd_float out_type;
   std::vector<out_type>           h_raw_series;
-  device_vector_wrapper<hd_float> d_series;
+  boost::compute::vector<hd_float> d_series;
   //thrust::host_vector<hd_float>   h_series;
-  device_vector_wrapper<hd_float> d_filtered;
+  boost::compute::vector<hd_float> d_filtered;
   //thrust::host_vector<hd_float>   h_beams_series;
   //thrust::device_vector<hd_float> d_beams_series;
-  device_vector_wrapper<int> d_filtered_rfi_mask;
-  device_vector_wrapper<int> d_rfi_mask;
+  boost::compute::vector<int> d_filtered_rfi_mask;
+  boost::compute::vector<int> d_rfi_mask;
   std::vector<int> h_rfi_mask;
 
   hd_size nchans = dedisp_get_channel_count(main_plan);
@@ -283,11 +275,11 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   hd_size stride = nchans * nbits/8 / sizeof(WordType);
   
   // TODO: Any way to avoid having to use this?
-  device_vector_wrapper<WordType> d_in((WordType *)h_in,
+  boost::compute::vector<WordType> d_in((WordType *)h_in,
                                      (WordType *)h_in + nsamps * stride);
   WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
 
-  device_vector_wrapper<hd_float> d_bandpass(nchans);
+  boost::compute::vector<hd_float> d_bandpass(nchans);
   hd_float *d_bandpass_ptr = dpct::get_raw_pointer(&d_bandpass[0]);
 
   // Narrow-band RFI is not an issue when nbits is small
@@ -320,17 +312,14 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
                                              max_chan_resample_dist);
       
       // Zap narrow-band RFI
-      oneapi::dpl::counting_iterator<unsigned int> begin(g*stride);
-      oneapi::dpl::counting_iterator<unsigned int> end((g+nsamps_gulp)*stride);
-      std::for_each(
-          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+      boost::compute::counting_iterator<unsigned int> begin(g*stride);
+      boost::compute::counting_iterator<unsigned int> end((g+nsamps_gulp)*stride);
+      boost::compute::for_each(
           begin, end, zapit);
     }
     
     h_in_copy.resize(nsamps*stride*sizeof(WordType));
-    std::copy(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        d_in.begin(), d_in.end(), (WordType *)&h_in_copy[0]);
+    boost::compute::copy(d_in.begin(), d_in.end(), (WordType *)&h_in_copy[0]);
   }
   else {
     h_in_copy.assign(h_in, h_in+nsamps*nchans*nbits/8);
@@ -420,8 +409,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
         dpct::get_raw_pointer(&d_filtered_rfi_mask[0]);
 
     // Create an RFI mask for this filter
-    std::transform(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+    boost::compute::transform(
         d_series.begin(), d_series.end(), d_rfi_mask.begin(),
         is_rfi<hd_float>(rfi_tol));
 
@@ -441,21 +429,18 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       filter_plan.exec(d_filtered_ptr, filter_width);
       
       // Normalise the filtered time series (RMS ~ sqrt(time))
-      third_party::counting_iterator<hd_float> 
+      boost::compute::counting_iterator<hd_float> 
         norm_val_iter(1.0 / sqrt((hd_float)filter_width));
-      std::transform(
-          // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-          std::execution::par,
+      boost::compute::transform(
           d_filtered.begin(), d_filtered.end(), norm_val_iter,
           d_filtered.begin(),
-          std::multiplies<hd_float>());
+          boost::compute::multiplies<hd_float>());
 
       //hd_size filter_offset = (boxcar_max-1)/2+1;
       hd_size filter_offset = boxcar_max / 2;
       
       // Create an RFI mask for this filter
-      std::transform(
-          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+      boost::compute::transform(
           d_filtered.begin(), d_filtered.end(),
           d_filtered_rfi_mask.begin() + filter_offset,
           is_rfi<hd_float>(rfi_tol));
@@ -469,15 +454,13 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
                             filter_width);
       
       // Merge the filtered mask with the global mask
-      std::transform(
-          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+      boost::compute::transform(
           d_rfi_mask.begin(), d_rfi_mask.end(), d_filtered_rfi_mask.begin(),
           d_rfi_mask.begin(),
-          /* DPCT_ORIG                         thrust::logical_or<int>());*/
-          std::logical_or<int>());
+          boost::compute::logical_or<int>());
     }
     // h_rfi_mask = d_rfi_mask;
-    oneapi_copy(d_rfi_mask, h_rfi_mask);
+    device_to_host_copy(d_rfi_mask, h_rfi_mask);
     // -------------------------------------
     
     // Finally, apply the mask to zap RFI in the filterbank
@@ -495,9 +478,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   }
   else
   {
-/* DPCT_ORIG     thrust::copy(&h_in_copy[0],*/
-    std::copy(oneapi::dpl::execution::seq, &h_in_copy[0],
-              &h_in_copy[0] + nsamps * nchans * nbits / 8, h_out);
+    std::copy(&h_in_copy[0], &h_in_copy[0] + nsamps * nchans * nbits / 8, h_out);
   }
     
   return HD_NO_ERROR;

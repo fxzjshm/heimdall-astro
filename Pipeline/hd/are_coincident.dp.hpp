@@ -7,17 +7,14 @@
 
 #pragma once
 
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
+#include <boost/compute.hpp>
 #include "hd/types.h"
 
-/* DPCT_ORIG inline __host__ __device__*/
 inline bool ranges_overlap(hd_size bi, hd_size ei, hd_size bj, hd_size ej,
                            hd_size tol) {
        return bi <= ej+tol && bj <= ei+tol;
 }
 
-/* DPCT_ORIG inline __host__ __device__*/
 inline bool are_coincident(hd_size samp_i, hd_size samp_j, hd_size begin_i,
                            hd_size begin_j, hd_size end_i, hd_size end_j,
                            hd_size filter_i, hd_size filter_j, hd_size dm_i,

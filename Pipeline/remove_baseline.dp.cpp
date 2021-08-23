@@ -5,23 +5,18 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "hd/remove_baseline.h"
 #include "hd/median_filter.h"
 //#include "hd/write_time_series.h"
 
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
-#include <dpct/dpl_utils.hpp>
+#include <boost/compute.hpp>
 #include "hd/utils.hpp"
 #include <cmath>
 
 class RemoveBaselinePlan_impl {
-        device_vector_wrapper<hd_float> buf1;
-        device_vector_wrapper<hd_float> buf2;
-        device_vector_wrapper<hd_float> baseline;
+        boost::compute::vector<hd_float> buf1;
+        boost::compute::vector<hd_float> buf2;
+        boost::compute::vector<hd_float> baseline;
 
 public:
 	hd_error exec(hd_float* d_data, hd_size count,
@@ -82,13 +77,12 @@ public:
 		//write_device_time_series(baseline_ptr, count, 1.f, "thebaseline.tim");
 	
 		// Now we just subtract it off
-        std::transform(
-                    oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        boost::compute::transform(
                     d_data_begin, d_data_begin + count, baseline.begin(),
                     d_data_begin,
-                    std::minus<hd_float>());
+                    boost::compute::minus<hd_float>());
 
-                //write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
+        //write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
 	
 		return HD_NO_ERROR;
 	}

@@ -5,13 +5,9 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include "hd/label_candidate_clusters.h"
 #include "hd/are_coincident.dp.hpp"
-#include <dpct/dpl_utils.hpp>
+#include <boost/compute.hpp>
 #include "hd/utils.hpp"
 
 /*
@@ -225,22 +221,16 @@ hd_error label_candidate_clusters(hd_size            count,
 	 */
 
     dpct::device_pointer<hd_size> d_labels_begin(d_labels);
-    dpct::iota(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                   d_labels_begin, d_labels_begin + count);
+    boost::compute::iota(d_labels_begin, d_labels_begin + count);
 
     // This just does a brute-force O(N^2) search for neighbours and
 	//   re-labels as the minimum label over neighbours.
-/* DPCT_ORIG 	thrust::for_each(make_counting_iterator<unsigned int>(0),*/
-        std::for_each(oneapi::dpl::execution::make_device_policy(
-                          dpct::get_default_queue()),
-                      dpct::make_counting_iterator<unsigned int>(0),
-                      /* DPCT_ORIG make_counting_iterator<unsigned
-                         int>(count),*/
-                      dpct::make_counting_iterator<unsigned int>(count),
-                      cluster_functor(count, d_cands.inds, d_cands.begins,
-                                      d_cands.ends, d_cands.filter_inds,
-                                      d_cands.dm_inds, d_labels, time_tol,
-                                      filter_tol, dm_tol));
+        boost::compute::for_each(boost::compute::make_counting_iterator<unsigned int>(0),
+                                 boost::compute::make_counting_iterator<unsigned int>(count),
+                                 cluster_functor(count, d_cands.inds, d_cands.begins,
+                                                 d_cands.ends, d_cands.filter_inds,
+                                                 d_cands.dm_inds, d_labels, time_tol,
+                                                 filter_tol, dm_tol));
     /*
 	using thrust::make_transform_iterator;
 	using thrust::make_zip_iterator;
@@ -367,30 +357,25 @@ hd_error label_candidate_clusters(hd_size            count,
         dpct::device_pointer<unsigned int> d_counter_ptr(d_counter_address);
         *d_counter_ptr = 0;
 
-        std::for_each(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                      dpct::make_counting_iterator<unsigned int>(0),
-                      dpct::make_counting_iterator<unsigned int>(count),
-                      trace_equivalency_chain<hd_size>(d_labels));
+        boost::compute::for_each(boost::compute::make_counting_iterator<unsigned int>(0),
+                                 boost::compute::make_counting_iterator<unsigned int>(count),
+                                 trace_equivalency_chain<hd_size>(d_labels));
 
         //std::cout << "Total chain iterations: " << *d_counter_ptr << std::endl;
 	
 	// Finally we do a quick count of the number of unique labels
 	//   This is efficiently achieved by checking where new labels are
 	//     unchanged from their original values (i.e., where d_labels[i] == i)
-        device_vector_wrapper<int> d_label_roots;
+        boost::compute::vector<int> d_label_roots;
         d_label_roots.resize(count);
-        std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                       d_labels_begin, d_labels_begin + count,
-                       /* DPCT_ORIG make_counting_iterator<hd_size>(0),*/
-                       dpct::make_counting_iterator<hd_size>(0),
-                       d_label_roots.begin(), std::equal_to<hd_size>());
-/* DPCT_ORIG 	*label_count = thrust::count_if(d_label_roots.begin(),*/
+        boost::compute::transform(d_labels_begin, d_labels_begin + count,
+                                  boost::compute::make_counting_iterator<hd_size>(0),
+                                  d_label_roots.begin(), std::equal_to<hd_size>());
         *label_count =
-            std::count_if(oneapi::dpl::execution::make_device_policy(
-                              dpct::get_default_queue()),
+            boost::compute::count_if(
                           d_label_roots.begin(), d_label_roots.end(),
                           /* DPCT_ORIG thrust::identity<hd_size>());*/
-                          oneapi::dpl::identity());
+                          boost::compute::identity<hd_size>());
 
         return HD_NO_ERROR;
 }

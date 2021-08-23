@@ -11,23 +11,7 @@
 
 #pragma once
 
-// see https://community.intel.com/t5/Intel-oneAPI-Threading-Building/tbb-task-has-not-been-declared/m-p/1255725#M14806
-#if defined(_GLIBCXX_RELEASE) && 9 <=_GLIBCXX_RELEASE && _GLIBCXX_RELEASE <= 10
-#define PSTL_USE_PARALLEL_POLICIES 0
-#define _GLIBCXX_USE_TBB_PAR_BACKEND 0
-#define _PSTL_PAR_BACKEND_SERIAL
-#endif
-
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
-#include <dpct/dpl_utils.hpp>
-/* DPCT_ORIG #include <thrust/iterator/transform_iterator.h>*/
-
-/* DPCT_ORIG #include <thrust/iterator/permutation_iterator.h>*/
-
-/* DPCT_ORIG #include <thrust/functional.h>*/
+#include <boost/compute.hpp>
 
 // this example illustrates how to make strided access to a range of values
 // examples:
@@ -69,7 +53,7 @@ public:
 
 /* DPCT_ORIG     typedef typename thrust::counting_iterator<difference_type>
  * CountingIterator;*/
-    typedef typename oneapi::dpl::counting_iterator<difference_type>
+    typedef typename boost::compute::counting_iterator<difference_type>
         CountingIterator;
 /* DPCT_ORIG     typedef typename thrust::transform_iterator<stride_functor,
  * CountingIterator> TransformIterator;*/
