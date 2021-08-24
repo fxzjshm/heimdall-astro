@@ -1,4 +1,4 @@
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 
 // from http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html, licensed under BSD
 // with `inline` modifier added

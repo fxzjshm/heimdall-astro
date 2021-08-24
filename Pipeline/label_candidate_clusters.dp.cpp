@@ -8,7 +8,7 @@
 #include "hd/label_candidate_clusters.h"
 #include "hd/are_coincident.dp.hpp"
 #include <boost/compute.hpp>
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 
 /*
 // Lexicographically projects 3D integer coordinates onto a 1D coordinate

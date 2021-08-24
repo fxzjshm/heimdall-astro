@@ -7,11 +7,7 @@
 
 #include "hd/matched_filter.h"
 #include "hd/strided_range.h"
-#include "hd/utils.hpp"
-
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
-
-/* DPCT_ORIG #include <thrust/transform_scan.h>*/
+#include "hd/utils.dp.hpp"
 
 // TODO: Add error checking to the methods in here
 template <typename T> class MatchedFilterPlan_impl {

@@ -6,7 +6,7 @@
  ***************************************************************************/
 
 #include "hd/find_giants.h"
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 #include <boost/compute/algorithm/scatter_if.hpp>
 
 // TESTING only

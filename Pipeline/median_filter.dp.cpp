@@ -8,7 +8,7 @@
 #include "hd/median_filter.h"
 
 #include <boost/compute.hpp>
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 
 /*
   Note: The implementations of median3-5 here can be derived from

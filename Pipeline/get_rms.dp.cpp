@@ -8,7 +8,7 @@
 #include "hd/get_rms.h"
 #include "hd/median_filter.h"
 #include <boost/compute.hpp>
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 
 template <typename T>
 struct absolute_val {

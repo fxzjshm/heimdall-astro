@@ -33,7 +33,7 @@ using std::endl;
 #include "hd/SocketException.h"
 #include "hd/stopwatch.h"         // For benchmarking
 //#include "hd/write_time_series.h" // For debugging
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 
 #include <dedisp.h>
 

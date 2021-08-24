@@ -12,7 +12,7 @@
 #include "hd/get_rms.h"
 #include "hd/measure_bandpass.h"
 #include "hd/matched_filter.h"
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 
 #include <vector>
 #include <dedisp.h>

@@ -10,7 +10,7 @@
 //#include "hd/write_time_series.h"
 
 #include <boost/compute.hpp>
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 #include <cmath>
 
 class RemoveBaselinePlan_impl {

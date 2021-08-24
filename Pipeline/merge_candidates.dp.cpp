@@ -6,7 +6,7 @@
  ***************************************************************************/
 
 #include "hd/merge_candidates.h"
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
 #include <boost/compute.hpp>
 
 typedef std::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
