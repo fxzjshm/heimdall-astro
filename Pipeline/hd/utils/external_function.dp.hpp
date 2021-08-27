@@ -1,4 +1,8 @@
-#include <boost/compute.hpp>
+#pragma once
+
+#include <vector>
+
+#include <boost/compute/detail/meta_kernel.hpp>
 
 class external_function {
 public:
@@ -23,7 +27,7 @@ public:
     // std::vector<std::string> type_defines;
 
     function_with_external_function(T main_func_, external_function func_/*, std::vector<std::string> type_defines_ = std::vector<std::string>()*/)
-        : function_with_external_function(main_func_, {func_}, /*type_defines_*/) {}
+        : function_with_external_function(main_func_, std::vector<external_function>({func_}) /*, type_defines_*/) {}
 
     function_with_external_function(T main_func_, std::vector<external_function> funcs_/*, std::vector<std::string> type_defines_ = std::vector<std::string>()*/)
         : main_func(main_func_), funcs(funcs_)/*, type_defines(type_defines_)*/ {}
@@ -91,6 +95,4 @@ inline meta_kernel &operator<<(meta_kernel &kernel, const invoked_function_with_
 } // namespace compute
 } // namespace boost
 
-#define DEFINE_BOTH_SIDE(name, source) \
-    source; \
-    const external_function name##_function(#name, #source);
+#define DEFINE_BOTH_SIDE(name, source) source; const external_function name##_function(#name, #source);
