@@ -11,12 +11,24 @@
 #include <boost/compute/algorithm/transform.hpp>
 #include <boost/compute/lambda.hpp>
 
+template <typename T, bool is_integral = std::is_integral<T>::value, bool is_floating_point = std::is_floating_point<T>::value>
+struct absolute_val;
+
 template <typename T>
-struct absolute_val {
+struct absolute_val<T, true, false> {
     inline auto operator()() const {
         using boost::compute::lambda::_1;
         using boost::compute::lambda::abs;
         return abs(_1);
+    }
+};
+
+template <typename T>
+struct absolute_val <T, false, true> {
+    inline auto operator()() const {
+        using boost::compute::lambda::_1;
+        using boost::compute::lambda::fabs;
+        return fabs(_1);
     }
 };
 
