@@ -9,16 +9,20 @@
 #include "hd/strided_range.h"
 #include "hd/utils.dp.hpp"
 
+#include <boost/compute/iterator/strided_iterator.hpp>
+
+using boost::compute::buffer_iterator;
+
 // TODO: Add error checking to the methods in here
 template <typename T> class MatchedFilterPlan_impl {
-  boost::compute::vector<T> m_scanned;
+  device_vector_wrapper<T> m_scanned;
   hd_size m_max_width;
 
 public:
-  hd_error prep(const T *d_in, hd_size count, hd_size max_width) {
+  hd_error prep(const buffer_iterator<T> d_in, hd_size count, hd_size max_width) {
     m_max_width = max_width;
-    dpct::device_pointer<const T> d_in_begin(d_in);
-    dpct::device_pointer<const T> d_in_end(d_in + count);
+    boost::compute::buffer_iterator<T> d_in_begin(d_in);
+    boost::compute::buffer_iterator<T> d_in_end(d_in + count);
 
     // Note: One extra element so that we include the final value
     m_scanned.resize(count + 1, 0);
@@ -30,11 +34,11 @@ public:
   // Note: This writes div_round_up(count + 1 - max_width, tscrunch) values to
   // d_out with a relative starting offset of max_width/2
   // Note: This does not apply any normalisation to the output
-  hd_error exec(T *d_out, hd_size filter_width, hd_size tscrunch = 1) {
+  hd_error exec(buffer_iterator<T> d_out, hd_size filter_width, hd_size tscrunch = 1) {
     // TODO: Check that prep( ) has been called
     // TODO: Check that width <= m_max_width
 
-    dpct::device_pointer<T> d_out_begin(d_out);
+    boost::compute::buffer_iterator<T> d_out_begin(d_out);
 
     hd_size offset = m_max_width / 2;
     hd_size ahead = (filter_width - 1) / 2 + 1; // Divide and round up
@@ -43,7 +47,7 @@ public:
 
     hd_size stride = tscrunch;
 
-    typedef typename dpct::device_vector<T>::iterator Iterator;
+    typedef typename boost::compute::vector<T>::iterator Iterator;
 
     // Striding through the scanned array has the same effect as tscrunching
     // TODO: Think about this carefully. Does it do exactly what we want?
@@ -53,9 +57,14 @@ public:
     strided_range<Iterator> in_range2(
         m_scanned.begin() + offset - behind,
         m_scanned.begin() + offset - behind + out_count, stride);
+    boost::compute::strided_iterator in_range1_begin(m_scanned.begin() + offset + ahead, stride);
+    boost::compute::strided_iterator in_range1_end(m_scanned.begin() + offset + ahead + out_count, stride);
+    boost::compute::strided_iterator in_range2_begin(m_scanned.begin() + offset - behind, stride);
+    boost::compute::strided_iterator in_range2_end(m_scanned.begin() + offset - behind + out_count, stride);
 
     boost::compute::transform(
-        in_range1.begin(), in_range1.end(), in_range2.begin(), d_out_begin,
+        // in_range1.begin(), in_range1.end(), in_range2.begin(), d_out_begin,
+        in_range1_begin, in_range1_end, in_range2_begin, d_out_begin,
         boost::compute::minus<T>());
 
     return HD_NO_ERROR;
@@ -67,13 +76,13 @@ template <typename T>
 MatchedFilterPlan<T>::MatchedFilterPlan()
     : m_impl(new MatchedFilterPlan_impl<T>) {}
 template <typename T>
-hd_error MatchedFilterPlan<T>::prep(const T *d_in, hd_size count,
+hd_error MatchedFilterPlan<T>::prep(const boost::compute::buffer_iterator<T> d_in, hd_size count,
                                     hd_size max_width) {
   return m_impl->prep(d_in, count, max_width);
   // return (*this)->prep(d_in, count, max_width);
 }
 template <typename T>
-hd_error MatchedFilterPlan<T>::exec(T *d_out, hd_size filter_width,
+hd_error MatchedFilterPlan<T>::exec(boost::compute::buffer_iterator<T> d_out, hd_size filter_width,
                                     hd_size tscrunch) {
   return m_impl->exec(d_out, filter_width, tscrunch);
 }

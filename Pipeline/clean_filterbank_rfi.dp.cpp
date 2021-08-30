@@ -5,26 +5,31 @@
  *
  ***************************************************************************/
 
-#include <boost/compute.hpp>
-
 #include "hd/clean_filterbank_rfi.h"
 #include "hd/remove_baseline.h"
 #include "hd/get_rms.h"
 #include "hd/measure_bandpass.h"
 #include "hd/matched_filter.h"
-#include "hd/utils.dp.hpp"
 
+#include "hd/rng.dp.hpp"
+#include "hd/utils/device_to_host_copy.dp.hpp"
+#include "hd/utils/func_with_source_string.dp.hpp"
+#include "hd/utils/meta_kernel.dp.hpp"
+#include "hd/utils/wrappers.dp.hpp"
 #include <vector>
 #include <dedisp.h>
 #ifdef HAVE_MPI
 #include <mpi.h>
 #endif
 #include <cmath>
+#include <boost/compute/algorithm.hpp>
+#include <boost/compute/lambda.hpp>
 
 // TESTING ONLY
 //#include "hd/write_time_series.h"
 
 // A simple hashing function taken from Thrust's Monte Carlo example
+DEFINE_BOTH_SIDE(hash,
 inline unsigned int hash(unsigned int a) {
     a = (a+0x7ed55d16) + (a<<12);
     a = (a^0xc761c23c) ^ (a>>19);
@@ -34,13 +39,16 @@ inline unsigned int hash(unsigned int a) {
     a = (a^0xb55a4f09) ^ (a>>16);
     return a;
 }
+)
 
 template <typename T>
 struct abs_less_than {
   T thresh;
   abs_less_than(T thresh_) : thresh(thresh_) {}
-  inline bool operator()(T x) const {
-    return fabs(x) < thresh;
+  inline bool operator()() const {
+    using boost::compute::lambda::fabs;
+    using boost::compute::lambda::_1;
+    return fabs(_1) < thresh;
   }
 };
 
@@ -48,20 +56,24 @@ template <typename WordType>
 struct zap_fb_rfi_functor {
   // Note: Increasing this trades performance for accuracy
   enum { MAX_RESAMPLE_ATTEMPTS = 10 };
-  const int*      mask;
-  const WordType* in;
+  const boost::compute::buffer_iterator<int>      mask;
+  const boost::compute::buffer_iterator<WordType> in;
   unsigned int    stride;
   unsigned int    nbits;
   unsigned int    nsamps;
   unsigned int    max_resample_dist;
   WordType        bitmask;
-  zap_fb_rfi_functor(const int* mask_, const WordType* in_,
+  zap_fb_rfi_functor(const boost::compute::buffer_iterator<int> mask_,
+                     const boost::compute::buffer_iterator<WordType> in_,
                      unsigned int stride_, unsigned int nbits_,
                      unsigned int nsamps_, unsigned int max_resample_dist_)
     : mask(mask_), in(in_),
       stride(stride_), nbits(nbits_), bitmask((1<<nbits)-1),
       nsamps(nsamps_), max_resample_dist(max_resample_dist_) {}
-  inline WordType operator()(unsigned int i) const {
+  inline auto operator()() const {
+    std::string type_name = boost::compute::type_name<WordType>();
+    std::string name = std::string("zap_fb_rfi_functor_") + type_name;
+    auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(WordType, name.c_str(), (unsigned int i), (mask, in, stride, nbits, nsamps, max_resample_dist, bitmask), BOOST_COMPUTE_STRINGIZE_SOURCE({
     // Lift the 1D index into 2D filterbank coords
     // Note: c is the word, not the channel
     unsigned int t = i / stride;
@@ -74,7 +86,7 @@ struct zap_fb_rfi_functor {
       //         A better, but slower, method is to use rng.discard( )
       // TODO: Consider passing a global seed (e.g., derived from the current
       //          time) in here to ensure good randomness.
-      random_engine rng(seed);
+      mwc64x_state_t rng = {seed, 1};
       result = 0;
       // Iterate over channels in the word
       for( int k=0; k<int(sizeof(WordType)*8); k+=nbits ) {
@@ -82,13 +94,12 @@ struct zap_fb_rfi_functor {
           t - max_resample_dist : 0;
         unsigned int max_t = t < nsamps-1 - max_resample_dist ?
           t + max_resample_dist : nsamps-1;
-        uniform_int_distribution<unsigned int> dist(min_t, max_t);
-        unsigned int new_t = dist(rng);
+        unsigned int new_t = (MWC64X_NextUint(rng) % (max_t - min_t)) + min_t;
         // Avoid replacing with another bad sample
         // Note: We must limit the number of attempts here for speed
         int attempts = 0;
         while( mask[new_t] && ++attempts < MAX_RESAMPLE_ATTEMPTS+1 ) {
-          new_t = dist(rng);
+          new_t = (MWC64X_NextUint(rng) % (max_t - min_t)) + min_t;
         }
         
         WordType val = (in[new_t*stride + c] >> k) & bitmask;
@@ -100,14 +111,18 @@ struct zap_fb_rfi_functor {
       result = in[i/*t*stride + c*/];
     }
     return result;
+    }));
+    func.define("WordType", type_name);
+    func.define("MAX_RESAMPLE_ATTEMPTS", std::to_string(MAX_RESAMPLE_ATTEMPTS));
+    return function_with_external_function(func, {hash_function, mwc64x_rng});
   }
 };
 template <typename WordType>
 struct zap_narrow_rfi_functor {
   // Note: Increasing this trades performance for accuracy
   enum { MAX_RESAMPLE_ATTEMPTS = 10 };
-  WordType*       data;
-  const float*    baseline;
+  boost::compute::buffer_iterator<WordType>       data;
+  const boost::compute::buffer_iterator<float>    baseline;
   float           thresh;
   unsigned int    stride;
   unsigned int    nbits;
@@ -115,7 +130,8 @@ struct zap_narrow_rfi_functor {
   unsigned int    max_resample_dist;
   WordType        bitmask;
   unsigned int    chans_per_word;
-  zap_narrow_rfi_functor(WordType* data_, const float* baseline_,
+  zap_narrow_rfi_functor(boost::compute::buffer_iterator<WordType> data_,
+                         const boost::compute::buffer_iterator<float> baseline_,
                          float thresh_,
                          unsigned int stride_, unsigned int nbits_,
                          unsigned int nchans_, unsigned int max_resample_dist_)
@@ -124,13 +140,19 @@ struct zap_narrow_rfi_functor {
       nchans(nchans_), max_resample_dist(max_resample_dist_),
       chans_per_word(sizeof(WordType)*8/nbits) {}
 
-  inline WordType sample(unsigned int t, unsigned int c) const {
-    unsigned int w = c / chans_per_word;
-    unsigned int k = c % chans_per_word;
-    return (data[t*stride + w] >> (k*nbits)) & bitmask;
-  }
+  inline auto operator()() const {
+    std::string type_name = boost::compute::type_name<WordType>();
+    std::string name = std::string("zap_fb_rfi_functor_") + type_name;
 
-  inline void operator()(unsigned int i) const {
+    const external_function sample_function("sample", BOOST_COMPUTE_STRINGIZE_SOURCE(
+      inline WordType sample(__global WordType* data, unsigned int t, unsigned int c) const {
+        unsigned int w = c / chans_per_word;
+        unsigned int k = c % chans_per_word;
+        return (data[t*stride + w] >> (k*nbits)) & bitmask;
+      }
+    ), {{"WordType", type_name}});
+
+    auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(void, name.c_str(), (unsigned int i), (data, baseline, thresh, stride, nbits, bitmask, nchans, max_resample_dist, chans_per_word), BOOST_COMPUTE_STRINGIZE_SOURCE({
     // Lift the 1D index into 2D filterbank coords
     unsigned int t = i / stride;
     unsigned int w = i % stride;
@@ -177,6 +199,10 @@ struct zap_narrow_rfi_functor {
     if( any_bad ) {
       data[i] = word;
     }
+    }));
+    func.define("WordType", type_name);
+    func.define("MAX_RESAMPLE_ATTEMPTS", std::to_string(MAX_RESAMPLE_ATTEMPTS));
+    return function_with_external_function(func, {hash_function, mwc64x_rng, sample_function});
   }
 };
 
@@ -202,18 +228,18 @@ hd_error zap_filterbank_rfi(const int* h_mask, const hd_byte* h_in,
   // TODO: Tidy this up. Could possibly pass device arrays rather than host.
   
   // Copy filterbank data to the device
-  boost::compute::vector<WordType> d_in((WordType *)h_in,
+  device_vector_wrapper<WordType> d_in((WordType *)h_in,
                                      (WordType *)h_in + nsamps * stride);
-  boost::compute::vector<WordType> d_out(nsamps * stride);
-  boost::compute::vector<int> d_mask(h_mask, h_mask + nsamps);
-  WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
-  int *d_mask_ptr = dpct::get_raw_pointer(&d_mask[0]);
+  device_vector_wrapper<WordType> d_out(nsamps * stride);
+  device_vector_wrapper<int> d_mask(h_mask, h_mask + nsamps);
+  boost::compute::buffer_iterator<WordType> d_in_ptr = d_in.begin();
+  boost::compute::buffer_iterator<int> d_mask_ptr = d_mask.begin();
   boost::compute::transform(
       boost::compute::counting_iterator<unsigned int>(0),
       boost::compute::counting_iterator<unsigned int>(nsamps * stride),
       d_out.begin(),
       zap_fb_rfi_functor<WordType>(d_mask_ptr, d_in_ptr, stride, nbits, nsamps,
-                                   max_resample_dist));
+                                   max_resample_dist)());
   // Copy back to the host
   boost::compute::copy(d_out.begin(), d_out.end(), (WordType *)h_out);
 
@@ -224,8 +250,10 @@ template <typename T>
 struct is_rfi {
   T thresh;
   is_rfi(T thresh_) : thresh(thresh_) {}
-  inline bool operator()(T x) const {
-    return fabs(x) > thresh;
+  inline auto operator()() const {
+    using boost::compute::lambda::fabs;
+    using boost::compute::lambda::_1; // x
+    return fabs(_1) > thresh;
   }
 };
 
@@ -233,8 +261,11 @@ template <typename T>
 struct rfi_mask_functor {
   T thresh;
   rfi_mask_functor(T thresh_) : thresh(thresh_) {}
-  inline bool operator()(T x, int mask) const {
-    return (fabs(x) > thresh) || mask;
+  inline auto operator()() const {
+    using boost::compute::lambda::fabs;
+    using boost::compute::lambda::_1; // x
+    using boost::compute::lambda::_2; // mask
+    return (fabs(_1) > thresh) || _2;
   }
 };
 
@@ -257,13 +288,13 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   
   typedef hd_float out_type;
   std::vector<out_type>           h_raw_series;
-  boost::compute::vector<hd_float> d_series;
+  device_vector_wrapper<hd_float> d_series;
   //thrust::host_vector<hd_float>   h_series;
-  boost::compute::vector<hd_float> d_filtered;
+  device_vector_wrapper<hd_float> d_filtered;
   //thrust::host_vector<hd_float>   h_beams_series;
   //thrust::device_vector<hd_float> d_beams_series;
-  boost::compute::vector<int> d_filtered_rfi_mask;
-  boost::compute::vector<int> d_rfi_mask;
+  device_vector_wrapper<int> d_filtered_rfi_mask;
+  device_vector_wrapper<int> d_rfi_mask;
   std::vector<int> h_rfi_mask;
 
   hd_size nchans = dedisp_get_channel_count(main_plan);
@@ -275,12 +306,12 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   hd_size stride = nchans * nbits/8 / sizeof(WordType);
   
   // TODO: Any way to avoid having to use this?
-  boost::compute::vector<WordType> d_in((WordType *)h_in,
+  device_vector_wrapper<WordType> d_in((WordType *)h_in,
                                      (WordType *)h_in + nsamps * stride);
-  WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
+  boost::compute::buffer_iterator<WordType> d_in_ptr = d_in.begin();
 
-  boost::compute::vector<hd_float> d_bandpass(nchans);
-  hd_float *d_bandpass_ptr = dpct::get_raw_pointer(&d_bandpass[0]);
+  device_vector_wrapper<hd_float> d_bandpass(nchans);
+  boost::compute::buffer_iterator<hd_float> d_bandpass_ptr = d_bandpass.begin();
 
   // Narrow-band RFI is not an issue when nbits is small
   // Note: Small nbits can actually cause this excision code to fail
@@ -301,7 +332,10 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       
       // Measure the bandpass
       hd_float rms = 0;
-      measure_bandpass((hd_byte*)(d_in_ptr + g*stride),
+      //       measure_bandpass((hd_byte*)(d_in_ptr + g*stride),
+      boost::compute::buffer_iterator<WordType> d_in_cur = (d_in_ptr + g*stride);
+      boost::compute::buffer_iterator<hd_byte> d_in_cur_cvt(d_in_cur.get_buffer(), d_in_cur.get_index() * sizeof(WordType) / sizeof(hd_byte));
+      measure_bandpass(d_in_cur_cvt,
                        nsamps_gulp, nchans, nbits,
                        d_bandpass_ptr, &rms);
       
@@ -315,7 +349,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       boost::compute::counting_iterator<unsigned int> begin(g*stride);
       boost::compute::counting_iterator<unsigned int> end((g+nsamps_gulp)*stride);
       boost::compute::for_each(
-          begin, end, zapit);
+          begin, end, zapit());
     }
     
     h_in_copy.resize(nsamps*stride*sizeof(WordType));
@@ -375,7 +409,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     d_series = h_raw_series;
     // Remove the baseline
     hd_size nsamps_smooth = hd_size(baseline_length / (2 * dt));
-    hd_float *d_series_ptr = dpct::get_raw_pointer(&d_series[0]);
+    boost::compute::buffer_iterator<hd_float> d_series_ptr = d_series.begin();
 
     //write_device_time_series(d_series_ptr, nsamps_computed,
     //                         dt, "dm0_dedispersed.tim");
@@ -404,19 +438,17 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     d_rfi_mask.resize(nsamps_computed, 0);
     
     d_filtered_rfi_mask.resize(nsamps_computed, 0);
-    int *d_filtered_rfi_mask_ptr =
-        /* DPCT_ORIG       thrust::raw_pointer_cast(&d_filtered_rfi_mask[0]);*/
-        dpct::get_raw_pointer(&d_filtered_rfi_mask[0]);
+    boost::compute::buffer_iterator<int> d_filtered_rfi_mask_ptr = d_filtered_rfi_mask.begin();
 
     // Create an RFI mask for this filter
     boost::compute::transform(
         d_series.begin(), d_series.end(), d_rfi_mask.begin(),
-        is_rfi<hd_float>(rfi_tol));
+        is_rfi<hd_float>(rfi_tol)());
 
     // Note: The filtered output is shorter by boxcar_max samps
     //         and offset by boxcar_max/2 samps.
     d_filtered.resize(nsamps_computed + 1 - boxcar_max);
-    hd_float *d_filtered_ptr = dpct::get_raw_pointer(&d_filtered[0]);
+    boost::compute::buffer_iterator<hd_float> d_filtered_ptr = d_filtered.begin();
     MatchedFilterPlan<hd_float> filter_plan;
     filter_plan.prep(d_series_ptr, nsamps_computed, boxcar_max);
     
@@ -443,7 +475,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       boost::compute::transform(
           d_filtered.begin(), d_filtered.end(),
           d_filtered_rfi_mask.begin() + filter_offset,
-          is_rfi<hd_float>(rfi_tol));
+          is_rfi<hd_float>(rfi_tol)());
 
       // Filter the RFI mask
       // Note: This ensures we zap all samples contributing to the peak

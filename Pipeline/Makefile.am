@@ -11,8 +11,8 @@ nobase_include_HEADERS = hd/median_filter.h hd/error.h hd/types.h
 AM_CPPFLAGS = -I$(top_srcdir) \
 	      -I$(top_srcdir)/Network \
 	      -I$(top_srcdir)/Formats \
-		  -I$(top_srcdir)/3rdparty/SYCL-PRNG/include \
-	      @DEDISP_CFLAGS@ $(BOOST_CPPFLAGS)
+	      @DEDISP_CFLAGS@ \
+          -std=c++17 -fPIE -lOpenCL
 
 include $(top_srcdir)/config/Makefile.targets
 

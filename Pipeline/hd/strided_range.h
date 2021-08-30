@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <boost/compute.hpp>
+#include <boost/compute/iterator.hpp>
 
 // this example illustrates how to make strided access to a range of values
 // examples:
@@ -24,26 +24,22 @@
 template <typename Iterator>
 class strided_range {
 public:
-/* DPCT_ORIG     typedef typename thrust::iterator_difference<Iterator>::type
- * difference_type;*/
     typedef typename std::iterator_traits<Iterator>::difference_type
         difference_type;
+    
+    // see boost::compute::strided_iterator
+    typedef ::boost::iterator_adaptor<
+        strided_range<Iterator>,
+        Iterator,
+        typename std::iterator_traits<Iterator>::value_type,
+        typename std::iterator_traits<Iterator>::iterator_category
+    > type;
 
-/* DPCT_ORIG     struct stride_functor : public
-   thrust::unary_function<difference_type,difference_type>
-    {*/
-    /*
-    DPCT1044:11: thrust::unary_function was removed because std::unary_function
-    has been deprecated in C++11. You may need to remove references to typedefs
-    from thrust::unary_function in the class definition.
-    */
     struct stride_functor {
         difference_type stride;
 
         stride_functor(difference_type stride)
             : stride(stride) {}
-
-/* DPCT_ORIG         __host__ __device__*/
 
         difference_type operator()(const difference_type& i) const
         { 
@@ -51,21 +47,11 @@ public:
         }
     };
 
-/* DPCT_ORIG     typedef typename thrust::counting_iterator<difference_type>
- * CountingIterator;*/
-    typedef typename boost::compute::counting_iterator<difference_type>
-        CountingIterator;
-/* DPCT_ORIG     typedef typename thrust::transform_iterator<stride_functor,
- * CountingIterator> TransformIterator;*/
-    typedef typename oneapi::dpl::transform_iterator<CountingIterator,
-                                                     stride_functor>
-        TransformIterator;
-/* DPCT_ORIG     typedef typename
- * thrust::permutation_iterator<Iterator,TransformIterator>
- * PermutationIterator;*/
-    typedef
-        typename oneapi::dpl::permutation_iterator<Iterator, TransformIterator>
-            PermutationIterator;
+    typedef typename boost::compute::counting_iterator<difference_type> CountingIterator;
+
+    typedef typename boost::compute::transform_iterator<CountingIterator, stride_functor> TransformIterator;
+
+    typedef typename boost::compute::permutation_iterator<Iterator, TransformIterator> PermutationIterator;
 
     // type of the strided_range iterator
     typedef PermutationIterator iterator;

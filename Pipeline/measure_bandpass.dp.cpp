@@ -8,41 +8,46 @@
 #include "hd/measure_bandpass.h"
 #include "hd/get_rms.h"
 #include "hd/median_filter.h"
-#include <boost/compute.hpp>
 
 // TESTING ONLY
 // #include "hd/write_time_series.h"
 
-#include "hd/utils.hpp"
+#include "hd/utils.dp.hpp"
+#include <boost/compute/algorithm/transform.hpp>
+#include <boost/compute/lambda.hpp>
+#include <random>
 
 template <typename WordType>
 struct unpack_functor {
-    const WordType* in;
+    const boost::compute::buffer_iterator<WordType> in;
 	unsigned int    nbits;
 	unsigned int    chans_per_word;
 	WordType        bitmask;
-	unpack_functor(const WordType* in_, unsigned int nbits_)
+	unpack_functor(const boost::compute::buffer_iterator<WordType> in_, unsigned int nbits_)
 		: in(in_), nbits(nbits_),
 		  chans_per_word(sizeof(WordType)*8/nbits), bitmask((1<<nbits)-1) {}
 
-/* DPCT_ORIG 	inline __host__ __device__*/
-        inline float operator()(unsigned int c) const {
-                unsigned int w = c / chans_per_word;
+    inline auto operator()() const {
+        BOOST_COMPUTE_CLOSURE(float, unpack_functor, (unsigned int c), (in, nbits, chans_per_word, bitmask), {
+        unsigned int w = c / chans_per_word;
 		unsigned int k = c % chans_per_word;
 		return (float)((in[w] >> (k*nbits)) & bitmask);
+        });
+        return unpack_functor;
 	}
 };
 
 template <typename T>
-struct abs_val {
-/* DPCT_ORIG 	inline __host__ __device__*/
-        inline T operator()(T x) const { return fabs(x); }
-};
-hd_error measure_bandpass(const hd_byte* d_filterbank,
+constexpr auto abs_val() {
+    using namespace boost::compute::lambda;
+    return fabs(_1);
+}
+
+hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_filterbank,
                           hd_size        nsamps,
                           hd_size        nchans,
                           hd_size        nbits,
-                          hd_float*      d_bandpass,
+                          boost::compute::buffer_iterator<hd_float> d_bandpass,
                           hd_float*      rms)
 {
 	using boost::compute::make_counting_iterator;
@@ -52,48 +57,45 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	
 	//thrust::device_vector<hd_float> d_spectrum(nchans);
 	//hd_float* d_spectrum_ptr = thrust::raw_pointer_cast(&d_spectrum[0]);
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_bandpass_begin(d_bandpass);*/
-        dpct::device_pointer<hd_float> d_bandpass_begin(d_bandpass);
+    boost::compute::buffer_iterator<hd_float> d_bandpass_begin(d_bandpass);
 
     // First we find the median of a selection of sample spectra
     // TODO: Can/should make this a parameter?
     // TODO: Does this give a good balance of performance vs. accuracy?
     // Note: Changing this requires changing the code below.
     hd_size spectrum_count = 5 * 5 * 5 * 5 * 5;
-    boost::compute::vector<hd_float> d_sample_spectra1(spectrum_count * nchans);
-    boost::compute::vector<hd_float> d_sample_spectra2(spectrum_count / 5 * nchans);
-    boost::compute::vector<hd_float> d_sample_spectra3(spectrum_count / 5 / 5 *
+    device_vector_wrapper<hd_float> d_sample_spectra1(spectrum_count * nchans);
+    device_vector_wrapper<hd_float> d_sample_spectra2(spectrum_count / 5 * nchans);
+    device_vector_wrapper<hd_float> d_sample_spectra3(spectrum_count / 5 / 5 *
                                                        nchans);
-    boost::compute::vector<hd_float> d_sample_spectra4(spectrum_count / 5 / 5 /
+    device_vector_wrapper<hd_float> d_sample_spectra4(spectrum_count / 5 / 5 /
                                                        5 * nchans);
-    boost::compute::vector<hd_float> d_sample_spectra5(spectrum_count / 5 / 5 /
+    device_vector_wrapper<hd_float> d_sample_spectra5(spectrum_count / 5 / 5 /
                                                        5 / 5 * nchans);
 
-    hd_float *d_sample_spectra1_ptr =
-        dpct::get_raw_pointer(&d_sample_spectra1[0]);
-    hd_float *d_sample_spectra2_ptr =
-        dpct::get_raw_pointer(&d_sample_spectra2[0]);
-    hd_float *d_sample_spectra3_ptr =
-        dpct::get_raw_pointer(&d_sample_spectra3[0]);
-    hd_float *d_sample_spectra4_ptr =
-        dpct::get_raw_pointer(&d_sample_spectra4[0]);
-    hd_float *d_sample_spectra5_ptr =
-        dpct::get_raw_pointer(&d_sample_spectra5[0]);
+    boost::compute::buffer_iterator<hd_float> d_sample_spectra1_ptr = d_sample_spectra1.begin();
+    boost::compute::buffer_iterator<hd_float> d_sample_spectra2_ptr = d_sample_spectra2.begin();
+    boost::compute::buffer_iterator<hd_float> d_sample_spectra3_ptr = d_sample_spectra3.begin();
+    boost::compute::buffer_iterator<hd_float> d_sample_spectra4_ptr = d_sample_spectra4.begin();
+    boost::compute::buffer_iterator<hd_float> d_sample_spectra5_ptr = d_sample_spectra5.begin();
 
     // TODO: Make this more random?
     hd_size seed = 123456;
-    random_engine rng(seed);
-    uniform_int_distribution<unsigned int> distribution(0, nsamps - 1);
+    std::default_random_engine rng(seed);
+    std::uniform_int_distribution<unsigned int> distribution(0, nsamps - 1);
     // Extract spectrum_count sample spectra from the filterbank
     for (hd_size i = 0; i < spectrum_count; ++i) {
         //hd_size t = i * spectrum_stride; // Regular spacing
         hd_size t = distribution(rng); // Uniform random sampling
-        WordType *d_in = (WordType *)&d_filterbank[t * stride];
+        // d_in = (WordType *)&d_filterbank[t * stride];
+        // TODO: check
+        boost::compute::buffer_iterator<hd_byte> d_in = d_filterbank + t * stride;
+        boost::compute::buffer_iterator<WordType> d_in_cvt(d_in.get_buffer(), d_in.get_index() * sizeof(hd_byte) / sizeof(WordType));
         boost::compute::transform(
             boost::compute::make_counting_iterator<unsigned int>(0),
             boost::compute::make_counting_iterator<unsigned int>(nchans),
             d_sample_spectra1.begin() + i * nchans,
-            unpack_functor<WordType>(d_in, nbits));
+            unpack_functor<WordType>(d_in_cvt, nbits)());
     }
 
     // Compute the 'remedian' (recursive median) of the sample spectra
@@ -117,9 +119,8 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
     //write_device_time_series(d_bandpass, nchans, 1.f, "median_spectrum.tim");
 
     // Now we smooth the spectrum to produce an estimate of the bandpass
-    boost::compute::vector<hd_float> d_scrunched_spectrum(nchans / 5);
-    hd_float *d_scrunched_spectrum_ptr =
-        dpct::get_raw_pointer(&d_scrunched_spectrum[0]);
+    device_vector_wrapper<hd_float> d_scrunched_spectrum(nchans / 5);
+    boost::compute::buffer_iterator<hd_float> d_scrunched_spectrum_ptr = d_scrunched_spectrum.begin();
     // TODO: This algorithm was derived empirically. It may not be suitable
     //         if applied to a different observing setup.
     median_scrunch5(d_bandpass, nchans,
@@ -136,8 +137,9 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
     // Extrapolate to make up the truncated samples
     // Note: This is very inefficient, but shouldn't affect performance
     for (hd_size i = nchans / 5 * 5; i < nchans; ++i) {
-        d_bandpass_begin[i] =
-            2 * d_bandpass_begin[i - 1] - d_bandpass_begin[i - 2];
+        // d_bandpass_begin[i] = 2 * d_bandpass_begin[i - 1] - d_bandpass_begin[i - 2];
+        (d_bandpass_begin + i).write(2 * d_bandpass_begin[i - 1] - d_bandpass_begin[i - 2],
+                                     boost::compute::system::default_queue());
     }
     // The bandpass estimate is now in d_bandpass
 
@@ -149,16 +151,10 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
     //std::vector<hd_float> sample_rms2(spectrum_count);
     // TODO: These are on the device only because I couldn't be bothered
     //         making host versions of the median_scrunch functions.
-    boost::compute::vector<hd_float> d_sample_rms1(spectrum_count);
-    boost::compute::vector<hd_float> d_sample_rms2(spectrum_count);
-    hd_float *d_sample_rms1_ptr =
-        /* DPCT_ORIG
-               thrust::raw_pointer_cast(&d_sample_rms1[0]);*/
-        dpct::get_raw_pointer(&d_sample_rms1[0]);
-    hd_float *d_sample_rms2_ptr =
-        /* DPCT_ORIG
-               thrust::raw_pointer_cast(&d_sample_rms2[0]);*/
-        dpct::get_raw_pointer(&d_sample_rms2[0]);
+    device_vector_wrapper<hd_float> d_sample_rms1(spectrum_count);
+    device_vector_wrapper<hd_float> d_sample_rms2(spectrum_count);
+    boost::compute::buffer_iterator<hd_float> d_sample_rms1_ptr = d_sample_rms1.begin();
+    boost::compute::buffer_iterator<hd_float> d_sample_rms2_ptr = d_sample_rms2.begin();
 
     for (hd_size i = 0; i < spectrum_count; ++i) {
         // Subtract the bandpass from the spectrum
@@ -177,8 +173,8 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
         //d_sample_rms1[i] = get_rms(d_sample_spectra1_ptr + i*nchans, nchans);
     }
 
-    boost::compute::vector<hd_float> d_mad(nchans);
-    hd_float *d_mad_ptr = dpct::get_raw_pointer(&d_mad[0]);
+    device_vector_wrapper<hd_float> d_mad(nchans);
+    boost::compute::buffer_iterator<hd_float> d_mad_ptr = d_mad.begin();
 
     // Compute the 'remedian' (recursive median) of the sample spectra
     // Note: We do this instead of a proper median for performance and simplicity
@@ -199,11 +195,11 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
                           d_mad_ptr);
 
     // Convert median absolute deviation to standard deviation
-    boost::compute::lambda::_1;
+    using boost::compute::lambda::_1;
 
     boost::compute::transform(
         d_mad.begin(), d_mad.end(), d_mad.begin(),
-        boost::compute::lambda::_1 * 1.4826f);
+        _1 * 1.4826f);
 
     //write_device_time_series(d_mad_ptr, nchans, 1.f, "mad.tim");
     /*

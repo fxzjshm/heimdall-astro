@@ -4,6 +4,8 @@
 #include <boost/compute/algorithm/scatter_if.hpp>
 #include <boost/compute/algorithm/transform.hpp>
 #include <boost/compute/algorithm/for_each.hpp>
+#include <boost/compute/iterator/permutation_iterator.hpp>
+#include <boost/compute/iterator/zip_iterator.hpp>
 #include <boost/compute/system.hpp>
 
 using boost::compute::command_queue;

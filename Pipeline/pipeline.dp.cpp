@@ -5,7 +5,6 @@
  *
  ***************************************************************************/
 
-#include <boost/compute.hpp>
 #include <vector>
 #include <memory>
 #include <iostream>
@@ -37,14 +36,16 @@ using std::endl;
 
 #include <dedisp.h>
 
+#include <boost/compute/algorithm.hpp>
+#include <boost/compute/lambda.hpp>
+
 #define HD_BENCHMARK
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
-/* DPCT_ORIG   void stop_timer(Stopwatch& timer) { cudaDeviceSynchronize();
- * timer.stop(); }*/
   void stop_timer(Stopwatch &timer) {
-   dpct::get_current_device().queues_wait_and_throw(); timer.stop();
+   boost::compute::system::default_queue().finish();
+   timer.stop();
   }
 #else
   void start_timer(Stopwatch& timer) { }
@@ -56,7 +57,7 @@ using std::endl;
 
 // for host-vector and device_vector
 template<typename T> using host_vector = std::vector<T>;
-template<typename T> using device_vector = boost::compute::vector<T>;
+template<typename T> using device_vector = device_vector_wrapper<T>;
 
  // For std::pair
 template<typename T, typename U>
@@ -85,15 +86,15 @@ hd_error allocate_gpu(const hd_params params) {
   int proc_idx = params.beam;
   int gpu_idx = params.gpu_id;
   
-  if (device_idx >= gpu_count) {
+  if (gpu_idx >= gpu_count) {
     return HD_INVALID_DEVICE_INDEX;
   }
-  std::string device_name = devices[device_idx].get_info<CL_DEVICE_NAME>();
+  std::string device_name = devices[gpu_idx].get_info<CL_DEVICE_NAME>();
   setenv("BOOST_COMPUTE_DEFAULT_DEVICE", device_name.c_str(), /* __replace = */ true);
   setenv("BOOST_COMPUTE_DEFAULT_ENFORCE", "1", /* __replace = */ true);
   assert(boost::compute::system::default_device().get_info<CL_DEVICE_NAME>() == device_name);
   if( params.verbosity >= 1 ) {
-    cout << "using device " << dpct::dev_mgr::instance().current_device().get_info<cl::sycl::info::device::name>() << endl;
+    cout << "using device " << device_name << endl;
   }
   dedisp_set_device(gpu_idx);
   
@@ -405,16 +406,16 @@ hd_error hd_execute(hd_pipeline pl,
   MatchedFilterPlan<hd_float> matched_filter_plan;
   GiantFinder                 giant_finder;
 
-  boost::compute::vector<hd_float> d_giant_peaks;
-  boost::compute::vector<hd_size> d_giant_inds;
-  boost::compute::vector<hd_size> d_giant_begins;
-  boost::compute::vector<hd_size> d_giant_ends;
-  boost::compute::vector<hd_size> d_giant_filter_inds;
-  boost::compute::vector<hd_size> d_giant_dm_inds;
-  boost::compute::vector<hd_size> d_giant_members;
+  device_vector_wrapper<hd_float> d_giant_peaks;
+  device_vector_wrapper<hd_size> d_giant_inds;
+  device_vector_wrapper<hd_size> d_giant_begins;
+  device_vector_wrapper<hd_size> d_giant_ends;
+  device_vector_wrapper<hd_size> d_giant_filter_inds;
+  device_vector_wrapper<hd_size> d_giant_dm_inds;
+  device_vector_wrapper<hd_size> d_giant_members;
 
-  typedef dpct::device_pointer<hd_float> dev_float_ptr;
-  typedef dpct::device_pointer<hd_size> dev_size_ptr;
+  typedef boost::compute::buffer_iterator<hd_float> dev_float_ptr;
+  typedef boost::compute::buffer_iterator<hd_size> dev_size_ptr;
 
   if( pl->params.verbosity >= 2 ) {
     cout << "\tDedispersing for DMs " << dm_list[0]
@@ -478,7 +479,7 @@ hd_error hd_execute(hd_pipeline pl,
 
 /* DPCT_ORIG     hd_float* time_series =
  * thrust::raw_pointer_cast(&pl->d_time_series[0]);*/
-    hd_float *time_series = dpct::get_raw_pointer(&pl->d_time_series[0]);
+    boost::compute::buffer_iterator<hd_float> time_series = pl->d_time_series.begin();
 
     // Copy the time series to the device and convert to floats
     hd_size offset = dm_idx * series_stride * pl->params.dm_nbits/8;
@@ -563,7 +564,7 @@ hd_error hd_execute(hd_pipeline pl,
 
 /* DPCT_ORIG     hd_float* filtered_series =
  * thrust::raw_pointer_cast(&pl->d_filtered_series[0]);*/
-    hd_float *filtered_series = dpct::get_raw_pointer(&pl->d_filtered_series[0]);
+    boost::compute::buffer_iterator<hd_float> filtered_series = pl->d_filtered_series.begin();
 
     // Note: Filtering is done using a combination of tscrunching and
     //         'proper' boxcar convolution. The parameter min_tscrunch_width
@@ -617,10 +618,10 @@ hd_error hd_execute(hd_pipeline pl,
         // see https://ui.adsabs.harvard.edu/abs/2021MNRAS.501.2316G/abstract [Appendix A]
         hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered);
         boost::compute::transform(
-            dpct::device_pointer<hd_float>(filtered_series),
-            dpct::device_pointer<hd_float>(filtered_series) + cur_nsamps_filtered,
+            boost::compute::buffer_iterator<hd_float>(filtered_series),
+            boost::compute::buffer_iterator<hd_float>(filtered_series) + cur_nsamps_filtered,
             boost::compute::make_constant_iterator(hd_float(1.0) / rms),
-            dpct::device_pointer<hd_float>(filtered_series),
+            boost::compute::buffer_iterator<hd_float>(filtered_series),
             boost::compute::multiplies<hd_float>());
       }
       else
@@ -629,10 +630,10 @@ hd_error hd_execute(hd_pipeline pl,
         boost::compute::constant_iterator<hd_float>
           norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
         boost::compute::transform(
-            dpct::device_pointer<hd_float>(filtered_series),
-            dpct::device_pointer<hd_float>(filtered_series) + cur_nsamps_filtered,
+            boost::compute::buffer_iterator<hd_float>(filtered_series),
+            boost::compute::buffer_iterator<hd_float>(filtered_series) + cur_nsamps_filtered,
             norm_val_iter,
-            dpct::device_pointer<hd_float>(filtered_series),
+            boost::compute::buffer_iterator<hd_float>(filtered_series),
             boost::compute::multiplies<hd_float>());
       }
 
@@ -726,17 +727,17 @@ hd_error hd_execute(hd_pipeline pl,
 
   //if (!too_many_giants)
   //{
-    boost::compute::vector<hd_size> d_giant_labels(giant_count);
-    hd_size *d_giant_labels_ptr = dpct::get_raw_pointer(&d_giant_labels[0]);
+    device_vector_wrapper<hd_size> d_giant_labels(giant_count);
+    boost::compute::buffer_iterator<hd_size> d_giant_labels_ptr = d_giant_labels.begin();
 
-    RawCandidates d_giants;
-    d_giants.peaks = dpct::get_raw_pointer(&d_giant_peaks[0]);
-    d_giants.inds = dpct::get_raw_pointer(&d_giant_inds[0]);
-    d_giants.begins = dpct::get_raw_pointer(&d_giant_begins[0]);
-    d_giants.ends = dpct::get_raw_pointer(&d_giant_ends[0]);
-    d_giants.filter_inds = dpct::get_raw_pointer(&d_giant_filter_inds[0]);
-    d_giants.dm_inds = dpct::get_raw_pointer(&d_giant_dm_inds[0]);
-    d_giants.members = dpct::get_raw_pointer(&d_giant_members[0]);
+    RawCandidatesOnDevice d_giants;
+    d_giants.peaks = d_giant_peaks.begin();
+    d_giants.inds = d_giant_inds.begin();
+    d_giants.begins = d_giant_begins.begin();
+    d_giants.ends = d_giant_ends.begin();
+    d_giants.filter_inds = d_giant_filter_inds.begin();
+    d_giants.dm_inds = d_giant_dm_inds.begin();
+    d_giants.members = d_giant_members.begin();
 
     hd_size filter_count = get_filter_index(pl->params.boxcar_max) + 1;
 
@@ -744,11 +745,11 @@ hd_error hd_execute(hd_pipeline pl,
       cout << "Grouping coincident candidates..." << endl;
     }
 
-    ConstRawCandidates * const_d_giants = (ConstRawCandidates *) &d_giants;
+    // ConstRawCandidates * const_d_giants = (ConstRawCandidates *) &d_giants;
   
     hd_size label_count;
     error = label_candidate_clusters(giant_count,
-                                     *const_d_giants,
+                                     d_giants, // *const_d_giants,
                                      pl->params.cand_sep_time,
                                      pl->params.cand_sep_filter,
                                      pl->params.cand_sep_dm,
@@ -763,32 +764,32 @@ hd_error hd_execute(hd_pipeline pl,
       cout << "Candidate count = " << group_count << endl;
     }
 
-    boost::compute::vector<hd_float> d_group_peaks(group_count);
-    boost::compute::vector<hd_size> d_group_inds(group_count);
-    boost::compute::vector<hd_size> d_group_begins(group_count);
-    boost::compute::vector<hd_size> d_group_ends(group_count);
-    boost::compute::vector<hd_size> d_group_filter_inds(group_count);
-    boost::compute::vector<hd_size> d_group_dm_inds(group_count);
-    boost::compute::vector<hd_size> d_group_members(group_count);
+    device_vector_wrapper<hd_float> d_group_peaks(group_count);
+    device_vector_wrapper<hd_size> d_group_inds(group_count);
+    device_vector_wrapper<hd_size> d_group_begins(group_count);
+    device_vector_wrapper<hd_size> d_group_ends(group_count);
+    device_vector_wrapper<hd_size> d_group_filter_inds(group_count);
+    device_vector_wrapper<hd_size> d_group_dm_inds(group_count);
+    device_vector_wrapper<hd_size> d_group_members(group_count);
 
-    boost::compute::vector<hd_float> d_group_dms(group_count);
+    device_vector_wrapper<hd_float> d_group_dms(group_count);
 
-    RawCandidates d_groups;
-    d_groups.peaks = dpct::get_raw_pointer(&d_group_peaks[0]);
-    d_groups.inds = dpct::get_raw_pointer(&d_group_inds[0]);
-    d_groups.begins = dpct::get_raw_pointer(&d_group_begins[0]);
-    d_groups.ends = dpct::get_raw_pointer(&d_group_ends[0]);
-    d_groups.filter_inds = dpct::get_raw_pointer(&d_group_filter_inds[0]);
-    d_groups.dm_inds = dpct::get_raw_pointer(&d_group_dm_inds[0]);
-    d_groups.members = dpct::get_raw_pointer(&d_group_members[0]);
+    RawCandidatesOnDevice d_groups;
+    d_groups.peaks = d_group_peaks.begin();
+    d_groups.inds = d_group_inds.begin();
+    d_groups.begins = d_group_begins.begin();
+    d_groups.ends = d_group_ends.begin();
+    d_groups.filter_inds = d_group_filter_inds.begin();
+    d_groups.dm_inds = d_group_dm_inds.begin();
+    d_groups.members = d_group_members.begin();
 
     merge_candidates(giant_count,
                      d_giant_labels_ptr,
-                     *const_d_giants,
+                     d_giants, // *const_d_giants,
                      d_groups);
   
     // Look up the actual DM of each group
-    boost::compute::vector<hd_float> d_dm_list(dm_list, dm_list + dm_count);
+    device_vector_wrapper<hd_float> d_dm_list(dm_list, dm_list + dm_count);
     boost::compute::gather(
         d_group_dm_inds.begin(), d_group_dm_inds.end(),
         d_dm_list.begin(), d_group_dms.begin());

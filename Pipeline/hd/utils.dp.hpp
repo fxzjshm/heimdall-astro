@@ -1,8 +1,8 @@
 // third-party code should be used with their corresponding licenses
 #pragma once
 
-#include "hd/utils/closure_with_source_string.dp.hpp"
 #include "hd/utils/copy_if.dp.hpp"
+#include "hd/utils/func_with_source_string.dp.hpp"
 #include "hd/utils/device_to_host_copy.dp.hpp"
 #include "hd/utils/external_function.dp.hpp"
 #include "hd/utils/meta_kernel.dp.hpp"

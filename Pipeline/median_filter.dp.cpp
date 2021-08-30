@@ -331,13 +331,9 @@ struct mean2_functor {
     inline auto operator()() const {
         std::string type_name = boost::compute::type_name<T>();
         std::string name = std::string("mean2_functor_") + type_name;
-        std::string source(BOOST_COMPUTE_STRINGIZE_SOURCE(
-            inline T mean2_functor (T a, T b) {
+        auto func = BOOST_COMPUTE_FUNCTION_WITH_NAME_AND_SOURCE_STRING(T, name.c_str(), (T a, T b), BOOST_COMPUTE_STRINGIZE_SOURCE({
                 return (T)0.5 * (a + b);
-            }
-        ));
-        boost::replace_first(source, "mean2_functor", name);
-        auto func = boost::compute::make_function_from_source<T (T, T)>(name, source);
+        }));
         func.define("T", type_name);
         return func;
     }

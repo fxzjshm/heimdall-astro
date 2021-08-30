@@ -8,6 +8,7 @@
 #pragma once
 
 #include "hd/types.h"
+#include "hd/types_on_device.dp.hpp"
 #include "hd/error.h"
 /*
 hd_error label_candidate_clusters(hd_size        count,
@@ -37,9 +38,9 @@ hd_error label_candidate_clusters(hd_size        count,
                                   hd_size*       label_count);
 */
 hd_error label_candidate_clusters(hd_size            count,
-                                  ConstRawCandidates d_cands,
+                                  RawCandidatesOnDevice d_cands,
                                   hd_size            time_tol,
                                   hd_size            filter_tol,
                                   hd_size            dm_tol,
-                                  hd_size*           d_labels,
+                                  boost::compute::buffer_iterator<hd_size> d_labels,
                                   hd_size*           label_count);

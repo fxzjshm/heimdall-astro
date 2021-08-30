@@ -908,7 +908,7 @@ private:
 	*/
 
 // Create an array of head flags indicating candidate segments
-	boost::compute::vector<int> d_giant_segments(giant_count);
+	device_vector_wrapper<int> d_giant_segments(giant_count);
 	boost::compute::adjacent_difference(
                              d_giant_labels.begin(),
 	                         d_giant_labels.end(),

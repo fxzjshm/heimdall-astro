@@ -1,9 +1,17 @@
 This is a fork of https://sourceforge.net/p/heimdall-astro
 
-WARNING: the result is quite different from original version, not sure whether the compiler or DPCT library should be responsible for this. (See commit 4d94810)
-
-Currently `sycl` branch only support Intel's OneAPI (waiting for more implementations of SYCL 2020 and a substitution of dpct).
-Run `./configure` with prefix `CC=dpcpp CXX=dpcpp` to build.
+Currently `opencl` branch uses Boost.Compute to support OpenCL backend.
+Main modifications:
+* add `function_with_external_function` in order to package a functor with its dependencies together so that calling functions like `boost::compute::transform` will be easier. 
+  * see `Pipeline/hd/utils/external_function.dp.cpp`
+  * Note: don't know whether Boost.Compute has something similar already
+* all functor's `operator()` has been modified to return a `boost::compute::function`/`closure`/some wrapper, so `transform(begin, end, functor(parameter))` -> `transform(begin, end, functor(parameter)())`
+  * original proposal is converting a functor into a function which returns a `boost::compute::function`/... , but this leads to dangling references inside closure captures
+  * another proposal is using implicit type converting like `operator decltype(auto)` but this lead to `error: no class template named ‘result’ in ‘struct functor’`
+* support capturing a `boost::compute::buffer_iterator` as a parameter of `boost::compute::closure`
+  * see `Pipeline/hd/utils/meta_kernel.dp.hpp`
+* add `device_vector_wrapper` to support `resize(size_type n, T x)`
+  * see `Pipeline/hd/utils/wrappers.dp.hpp`
 
 Original wiki is at https://sourceforge.net/p/heimdall-astro/wiki/Home/
 Below is the original README

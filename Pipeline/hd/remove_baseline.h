@@ -11,12 +11,13 @@
 #include "hd/error.h"
 
 #include <boost/shared_ptr.hpp>
+#include <boost/compute/iterator/buffer_iterator.hpp>
 
 struct RemoveBaselinePlan_impl;
 
 struct RemoveBaselinePlan {
 	RemoveBaselinePlan();
-	hd_error exec(hd_float* d_data,
+	hd_error exec(boost::compute::buffer_iterator<hd_float> d_data,
 	              hd_size   count,
 	              hd_size   smooth_radius);
 private:

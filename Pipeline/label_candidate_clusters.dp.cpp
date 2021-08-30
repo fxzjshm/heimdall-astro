@@ -5,10 +5,13 @@
  *
  ***************************************************************************/
 
+#define BOOST_COMPUTE_MAX_ARITY 11
+
 #include "hd/label_candidate_clusters.h"
 #include "hd/are_coincident.dp.hpp"
-#include <boost/compute.hpp>
 #include "hd/utils.dp.hpp"
+
+#include <boost/compute/algorithm.hpp>
 
 /*
 // Lexicographically projects 3D integer coordinates onto a 1D coordinate
@@ -84,10 +87,9 @@ struct range_min_functor : public thrust::binary_function<void,void,ValueType> {
 	}
 };
 */
-/* DPCT_ORIG __device__ unsigned int d_counter;*/
-// dpct::global_memory<unsigned int, 0> d_counter;
-// TODO: check if this can work
-unsigned int d_counter;
+
+// TODO: implementing this counter is too complicated in OpenCL, so not doing this now
+// unsigned int d_counter;
 
 // Finds the root of a chain of equivalent labels
 //   E.g., 3->1, 4->3, 8->4, 5->8 => [1,3,4,5,8]->1
@@ -95,10 +97,14 @@ unsigned int d_counter;
 //         algorithm/implementation in more detail.
 template<typename T>
 struct trace_equivalency_chain {
-	T* new_labels;
-	trace_equivalency_chain(T* new_labels_) : new_labels(new_labels_) {}
-    inline /*__host__*/
-    void operator()(unsigned int old_label/*, unsigned int *d_counter*/) const {
+	boost::compute::buffer_iterator<T> new_labels;
+	trace_equivalency_chain(boost::compute::buffer_iterator<T> new_labels_) : new_labels(new_labels_) {}
+    
+    inline auto operator()() const {
+        std::string type_name = boost::compute::type_name<T>();
+        std::string name = std::string("trace_equivalency_chain_") + type_name;
+        auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(void, name, (unsigned int old_label), (new_labels), BOOST_COMPUTE_STRINGIZE_SOURCE({
+
         T cur_label = old_label;
 		while( new_labels[cur_label] != cur_label ) {
 			cur_label = new_labels[cur_label];
@@ -107,11 +113,8 @@ struct trace_equivalency_chain {
 			//                 new_labels[old_label] each iteration vs.
 			//                 only at the end (see commented line below).
 			//               It appears to make only 10-20% difference
-/* DPCT_ORIG 			atomicAdd(&d_counter, 1);*/
-                        sycl::atomic<unsigned int>(
-                            sycl::global_ptr<unsigned int>(&d_counter))
-                            .fetch_add(1);
-                }
+            /* TODO: atomicAdd(&d_counter, 1);*/
+        }
 		new_labels[old_label] = cur_label;
 		
 		/*
@@ -133,26 +136,32 @@ struct trace_equivalency_chain {
 		//         already-computed results.
 		new_labels[i] = new_label;
 		*/
-	}
+
+        }));
+        func.define("T", type_name);
+        return func;
+    }
 };
 
 struct cluster_functor {
 	hd_size  count;
-	const hd_size* d_samp_inds;
-	const hd_size* d_begins;
-	const hd_size* d_ends;
-	const hd_size* d_filters;
-	const hd_size* d_dms;
-	hd_size* d_labels;
+	const boost::compute::buffer_iterator<hd_size> d_samp_inds;
+	const boost::compute::buffer_iterator<hd_size> d_begins;
+	const boost::compute::buffer_iterator<hd_size> d_ends;
+	const boost::compute::buffer_iterator<hd_size> d_filters;
+	const boost::compute::buffer_iterator<hd_size> d_dms;
+	boost::compute::buffer_iterator<hd_size> d_labels;
 	hd_size  time_tol;
 	hd_size  filter_tol;
 	hd_size  dm_tol;
 	
 	cluster_functor(hd_size count_,
-	                const hd_size* d_samp_inds_,
-	                const hd_size* d_begins_, const hd_size* d_ends_,
-	                const hd_size* d_filters_, const hd_size* d_dms_,
-	                hd_size* d_labels_,
+	                const boost::compute::buffer_iterator<hd_size> d_samp_inds_,
+	                const boost::compute::buffer_iterator<hd_size> d_begins_,
+                    const boost::compute::buffer_iterator<hd_size> d_ends_,
+	                const boost::compute::buffer_iterator<hd_size> d_filters_,
+                    const boost::compute::buffer_iterator<hd_size> d_dms_,
+	                boost::compute::buffer_iterator<hd_size> d_labels_,
 	                hd_size time_tol_, hd_size filter_tol_, hd_size dm_tol_)
 		: count(count_),
 		  d_samp_inds(d_samp_inds_),
@@ -161,7 +170,9 @@ struct cluster_functor {
 		  d_labels(d_labels_),
 		  time_tol(time_tol_), filter_tol(filter_tol_), dm_tol(dm_tol_) {}
 
-    inline void operator()(unsigned int i) const {
+    inline auto operator()() const {
+	BOOST_COMPUTE_CLOSURE(void, cluster_functor, (unsigned int i),
+        (count, d_samp_inds, d_begins, d_ends, d_filters, d_dms, d_labels, time_tol, filter_tol, dm_tol), {
         hd_size samp_i   = d_samp_inds[i];
 		hd_size begin_i  = d_begins[i];
 		hd_size end_i    = d_ends[i];
@@ -184,12 +195,12 @@ struct cluster_functor {
 			                   dm_i, dm_j,
 			                   time_tol, filter_tol, dm_tol) ) {
 				// Re-label as the minimum of the two
-/* DPCT_ORIG 				d_labels[i] = min((int)d_labels[i],
- * (int)d_labels[j]);*/
-                                d_labels[i] = sycl::min((int)d_labels[i], (int)d_labels[j]);
-                        }
+                d_labels[i] = min((int)d_labels[i], (int)d_labels[j]);
+             }
 		}
-	}
+	});
+    return function_with_external_function(cluster_functor, are_coincident_function);
+    }
 };
 
 // Finds components of the given list that are connected in time, filter and DM
@@ -197,11 +208,11 @@ struct cluster_functor {
 // Note: Merge distances in filter and DM space are currently fixed at 1
 // TODO: Consider re-naming the *_count args to *_max
 hd_error label_candidate_clusters(hd_size            count,
-                                  ConstRawCandidates d_cands,
+                                  RawCandidatesOnDevice d_cands,
                                   hd_size            time_tol,
                                   hd_size            filter_tol,
                                   hd_size            dm_tol,
-                                  hd_size*           d_labels,
+                                  boost::compute::buffer_iterator<hd_size> d_labels,
                                   hd_size*           label_count)
 {
 	/*
@@ -220,8 +231,8 @@ hd_error label_candidate_clusters(hd_size            count,
 	              ci.new_label = min(ci.new_label, cj.new_label);
 	 */
 
-    dpct::device_pointer<hd_size> d_labels_begin(d_labels);
-    boost::compute::iota(d_labels_begin, d_labels_begin + count);
+    boost::compute::buffer_iterator<hd_size> d_labels_begin(d_labels);
+    boost::compute::iota(d_labels_begin, d_labels_begin + count, 0);
 
     // This just does a brute-force O(N^2) search for neighbours and
 	//   re-labels as the minimum label over neighbours.
@@ -230,7 +241,7 @@ hd_error label_candidate_clusters(hd_size            count,
                                  cluster_functor(count, d_cands.inds, d_cands.begins,
                                                  d_cands.ends, d_cands.filter_inds,
                                                  d_cands.dm_inds, d_labels, time_tol,
-                                                 filter_tol, dm_tol));
+                                                 filter_tol, dm_tol)());
     /*
 	using thrust::make_transform_iterator;
 	using thrust::make_zip_iterator;
@@ -351,30 +362,30 @@ hd_error label_candidate_clusters(hd_size            count,
 	//         as efficient as the sequential version but should win out
 	//         in overall speed.
 
+/*
 	unsigned int* d_counter_address=&d_counter;
-/* DPCT_ORIG 	cudaGetSymbolAddress((void**)&d_counter_address, d_counter);*/
-        // *((void **)&d_counter_address) = d_counter.get_ptr();
-        dpct::device_pointer<unsigned int> d_counter_ptr(d_counter_address);
-        *d_counter_ptr = 0;
+    // *((void **)&d_counter_address) = d_counter.get_ptr();
+    boost::compute::buffer_iterator<unsigned int> d_counter_ptr(d_counter_address);
+    *d_counter_ptr = 0;
 
-        boost::compute::for_each(boost::compute::make_counting_iterator<unsigned int>(0),
-                                 boost::compute::make_counting_iterator<unsigned int>(count),
-                                 trace_equivalency_chain<hd_size>(d_labels));
+    boost::compute::for_each(boost::compute::make_counting_iterator<unsigned int>(0),
+                             boost::compute::make_counting_iterator<unsigned int>(count),
+                             trace_equivalency_chain<hd_size>(d_labels));
 
-        //std::cout << "Total chain iterations: " << *d_counter_ptr << std::endl;
-	
+    //std::cout << "Total chain iterations: " << *d_counter_ptr << std::endl;
+*/
+
 	// Finally we do a quick count of the number of unique labels
 	//   This is efficiently achieved by checking where new labels are
 	//     unchanged from their original values (i.e., where d_labels[i] == i)
-        boost::compute::vector<int> d_label_roots;
+        device_vector_wrapper<int> d_label_roots;
         d_label_roots.resize(count);
         boost::compute::transform(d_labels_begin, d_labels_begin + count,
                                   boost::compute::make_counting_iterator<hd_size>(0),
-                                  d_label_roots.begin(), std::equal_to<hd_size>());
+                                  d_label_roots.begin(), boost::compute::equal_to<hd_size>());
         *label_count =
             boost::compute::count_if(
                           d_label_roots.begin(), d_label_roots.end(),
-                          /* DPCT_ORIG thrust::identity<hd_size>());*/
                           boost::compute::identity<hd_size>());
 
         return HD_NO_ERROR;

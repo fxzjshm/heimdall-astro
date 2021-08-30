@@ -10,7 +10,8 @@
 using std::string;
 #include <fstream>
 
-#include <boost/compute.hpp>
+#include <boost/compute/iterator/buffer_iterator.hpp>
+#include <boost/compute/system.hpp>
 
 namespace detail {
 // TODO: These were copied from header.hpp. Not sure if this is a good idea.
@@ -97,8 +98,8 @@ void write_device_time_series(const float* data,
 {
 	std::vector<float> h_data(nsamps);
 	try{
-        dpct::get_default_queue().memcpy(&h_data[0], data, nsamps * sizeof(float)).wait();
-    } catch(sycl::exception e) {
+        boost::compute::system::default_queue().memcpy(&h_data[0], data, nsamps * sizeof(float)).wait();
+    } catch(boost::compute::exception e) {
 		throw std::runtime_error(std::string("write_time_series: cudaMemcpy failed: ") + e.what());
 	}
 	write_host_time_series(&h_data[0], nsamps, dt, filename);

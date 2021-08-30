@@ -10,19 +10,21 @@
 #include "hd/error.h"
 #include "hd/types.h"
 
-hd_error measure_bandpass(const hd_byte* d_in,
+#include <boost/compute/iterator/buffer_iterator.hpp>
+
+hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_in,
                           hd_size        nsamps,
                           hd_size        nchans,
                           hd_size        nbits,
-                          hd_float*      d_bandpass,
+                          boost::compute::buffer_iterator<hd_float>      d_bandpass,
                           hd_float*      rms);
 
 // Note: This returns an estimate from a sub-sample, not the exact average
-hd_error measure_band_avg(const hd_byte* d_filterbank,
+hd_error measure_band_avg(const boost::compute::buffer_iterator<hd_byte> d_filterbank,
                           hd_size        nsamps,
                           hd_size        nchans,
                           hd_size        nbits,
-                          hd_float*      d_band_avg);
+                          boost::compute::buffer_iterator<hd_float>      d_band_avg);
 /*
 hd_error measure_band_outliers(const hd_byte* d_filterbank,
                                hd_size        nsamps,

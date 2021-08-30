@@ -9,19 +9,20 @@
 #include "hd/median_filter.h"
 //#include "hd/write_time_series.h"
 
-#include <boost/compute.hpp>
-#include "hd/utils.dp.hpp"
+#include "hd/utils/wrappers.dp.hpp"
 #include <cmath>
+#include <boost/compute/algorithm/transform.hpp>
+#include <boost/compute/system.hpp>
 
 class RemoveBaselinePlan_impl {
-        boost::compute::vector<hd_float> buf1;
-        boost::compute::vector<hd_float> buf2;
-        boost::compute::vector<hd_float> baseline;
+        device_vector_wrapper<hd_float> buf1;
+        device_vector_wrapper<hd_float> buf2;
+        device_vector_wrapper<hd_float> baseline;
 
 public:
-	hd_error exec(hd_float* d_data, hd_size count,
+	hd_error exec(boost::compute::buffer_iterator<hd_float> d_data, hd_size count,
 	              hd_size smooth_radius) {
-        dpct::device_pointer<hd_float> d_data_begin(d_data);
+        boost::compute::buffer_iterator<hd_float> d_data_begin(d_data);
 
         // This algorithm works by scrunching the data down to a time resolution
 		//   representative of the desired smoothing length and then stretching
@@ -41,12 +42,12 @@ public:
 	
 		// As we will use median-of-5, round to sample_count times a power of five
 		hd_size nscrunches  = (hd_size)(log(count/sample_count)/log(5.));
-        hd_size count_round = sycl::pow<double>(5., nscrunches) * sample_count;
+        hd_size count_round = std::pow<double>(5., nscrunches) * sample_count;
 
         buf1.resize(count_round);
 		buf2.resize(count_round/5);
-        hd_float *buf1_ptr = dpct::get_raw_pointer(&buf1[0]);
-        hd_float *buf2_ptr = dpct::get_raw_pointer(&buf2[0]);
+        boost::compute::buffer_iterator<hd_float> buf1_ptr = buf1.begin();
+        boost::compute::buffer_iterator<hd_float> buf2_ptr = buf2.begin();
 
         // First we re-sample to the rounded size
 		linear_stretch(d_data, count, buf1_ptr, count_round);
@@ -57,17 +58,19 @@ public:
 			std::swap(buf1_ptr, buf2_ptr);
 		}
 		// Note: Output is now at buf1_ptr
-        dpct::device_pointer<hd_float> buf1_begin(buf1_ptr);
-        dpct::device_pointer<hd_float> buf2_begin(buf2_ptr);
+        boost::compute::buffer_iterator<hd_float> buf1_begin(buf1_ptr);
+        boost::compute::buffer_iterator<hd_float> buf2_begin(buf2_ptr);
 
         // Then we need to extrapolate the ends
 		linear_stretch(buf1_ptr, sample_count, buf2_ptr+1, sample_count*2);
-		buf2_begin[0]                = 2*buf2_begin[1] - buf2_begin[2];
-		buf2_begin[sample_count*2+1] = (2*buf2_begin[sample_count*2] -
-		                                buf2_begin[sample_count*2-1]);
+        
+		(buf2_begin + 0).write(2*buf2_begin[1] - buf2_begin[2], boost::compute::system::default_queue());
+		(buf2_begin + sample_count*2+1).write((2*buf2_begin[sample_count*2] -
+		                                        buf2_begin[sample_count*2-1]), 
+                                              boost::compute::system::default_queue());
 	
 		baseline.resize(count);
-        hd_float *baseline_ptr = dpct::get_raw_pointer(&baseline[0]);
+        boost::compute::buffer_iterator<hd_float> baseline_ptr = baseline.begin();
 
         // And finally we stretch back to the original length
 		linear_stretch(buf2_ptr, sample_count*2+2, baseline_ptr, count);
@@ -91,7 +94,7 @@ public:
 // Public interface (wrapper for implementation)
 RemoveBaselinePlan::RemoveBaselinePlan()
 	: m_impl(new RemoveBaselinePlan_impl) {}
-hd_error RemoveBaselinePlan::exec(hd_float* d_data, hd_size count,
+hd_error RemoveBaselinePlan::exec(boost::compute::buffer_iterator<hd_float> d_data, hd_size count,
                                   hd_size smooth_radius) {
 	return m_impl->exec(d_data, count, smooth_radius);
 }

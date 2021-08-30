@@ -6,33 +6,35 @@
  ***************************************************************************/
 
 #include "hd/merge_candidates.h"
-#include "hd/utils.dp.hpp"
-#include <boost/compute.hpp>
 
-typedef std::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
+#include "hd/utils/wrappers.dp.hpp"
+#include "hd/utils/reduce_by_key.dp.hpp"
+#include <boost/compute/algorithm.hpp>
+#include <boost/compute/iterator.hpp>
+
+typedef boost::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
 
 struct merge_candidates_functor {
-    /* DPCT_ORIG 	inline __host__ __device__*/
-    inline candidate_tuple operator()(const candidate_tuple &c1,
-                                      const candidate_tuple &c2) const {
-        hd_float snr1 = std::get<0>(c1);
-        hd_size ind1 = std::get<1>(c1);
-        hd_size begin1 = std::get<2>(c1);
-        hd_size end1 = std::get<3>(c1);
-        hd_size filter_ind1 = std::get<4>(c1);
-        hd_size dm_ind1 = std::get<5>(c1);
-        hd_size members1 = std::get<6>(c1);
+    inline auto operator()() const {
+    BOOST_COMPUTE_FUNCTION(candidate_tuple, merge_candidates_functor, (const candidate_tuple &c1, const candidate_tuple &c2), {
+        hd_float snr1 = boost_tuple_get(c1, 0);
+        hd_size ind1 = boost_tuple_get(c1, 1);
+        hd_size begin1 = boost_tuple_get(c1, 2);
+        hd_size end1 = boost_tuple_get(c1, 3);
+        hd_size filter_ind1 = boost_tuple_get(c1, 4);
+        hd_size dm_ind1 = boost_tuple_get(c1, 5);
+        hd_size members1 = boost_tuple_get(c1, 6);
 
-        hd_float snr2 = std::get<0>(c2);
-        hd_size ind2 = std::get<1>(c2);
-        hd_size begin2 = std::get<2>(c2);
-        hd_size end2 = std::get<3>(c2);
-        hd_size filter_ind2 = std::get<4>(c2);
-        hd_size dm_ind2 = std::get<5>(c2);
-        hd_size members2 = std::get<6>(c2);
+        hd_float snr2 = boost_tuple_get(c2, 0);
+        hd_size ind2 = boost_tuple_get(c2, 1);
+        hd_size begin2 = boost_tuple_get(c2, 2);
+        hd_size end2 = boost_tuple_get(c2, 3);
+        hd_size filter_ind2 = boost_tuple_get(c2, 4);
+        hd_size dm_ind2 = boost_tuple_get(c2, 5);
+        hd_size members2 = boost_tuple_get(c2, 6);
 
         if (snr1 >= snr2) {
-            return std::make_tuple(
+            return {
                 snr1, ind1,
                 //(begin1+begin2)/2,
                 //(end1+end2)/2,
@@ -41,27 +43,32 @@ struct merge_candidates_functor {
                 // max((int)end1, (int)end2),
                 // TODO: But this may be better
                 begin1, end1, filter_ind1, dm_ind1,
-                members1 + members2);
+                members1 + members2
+            };
         } else {
-            return std::make_tuple(snr2, ind2,
-                                   //(begin1+begin2)/2,
-                                   //(end1+end2)/2,
-                                   // min((int)begin1, (int)begin2),
-                                   // max((int)end1, (int)end2),
-                                   begin2, end2, filter_ind2,
-                                   dm_ind2, members1 + members2);
+            return {
+                snr2, ind2,
+                //(begin1+begin2)/2,
+                //(end1+end2)/2,
+                // min((int)begin1, (int)begin2),
+                // max((int)end1, (int)end2),
+                begin2, end2, filter_ind2,
+                dm_ind2, members1 + members2
+            };
         }
+    });
+    return merge_candidates_functor;
     }
 };
 
 hd_error merge_candidates(hd_size count,
-                          hd_size *d_labels,
-                          ConstRawCandidates d_cands,
-                          RawCandidates d_groups) {
-    typedef dpct::device_pointer<hd_float> float_iterator;
-    typedef dpct::device_pointer<hd_size> size_iterator;
-    typedef dpct::device_pointer<const hd_float> const_float_iterator;
-    typedef dpct::device_pointer<const hd_size> const_size_iterator;
+                          boost::compute::buffer_iterator<hd_size> d_labels,
+                          RawCandidatesOnDevice d_cands,
+                          RawCandidatesOnDevice d_groups) {
+    typedef boost::compute::buffer_iterator<hd_float> float_iterator;
+    typedef boost::compute::buffer_iterator<hd_size> size_iterator;
+    typedef boost::compute::buffer_iterator<const hd_float> const_float_iterator;
+    typedef boost::compute::buffer_iterator<const hd_size> const_size_iterator;
 
     size_iterator labels_begin(d_labels);
 
@@ -82,12 +89,12 @@ hd_error merge_candidates(hd_size count,
     size_iterator group_members_begin(d_groups.members);
 
     // Sort by labels and remember permutation
-    boost::compute::vector<hd_size> d_permutation(count);
+    device_vector_wrapper<hd_size> d_permutation(count);
     boost::compute::iota(d_permutation.begin(), d_permutation.end(), 0);
-    boost::compute::sort(labels_begin, labels_begin + count, d_permutation.begin());
+    boost::compute::sort_by_key(labels_begin, labels_begin + count, d_permutation.begin());
 
     // Merge giants into groups according to the label
-    boost::compute::reduce_by_key(
+    boost::compute::detail::dispatch_reduce_by_key_no_count_check(
         labels_begin, labels_begin + count,
         boost::compute::make_permutation_iterator(
             boost::compute::make_zip_iterator(boost::make_tuple(cand_peaks_begin,
@@ -106,7 +113,8 @@ hd_error merge_candidates(hd_size count,
                                                             group_filter_inds_begin,
                                                             group_dm_inds_begin,
                                                             group_members_begin)),
-        boost::compute::equal_to<hd_size>(), merge_candidates_functor());
+        boost::compute::equal_to<hd_size>(), merge_candidates_functor()(),
+        boost::compute::system::default_queue());
 
     return HD_NO_ERROR;
 }
