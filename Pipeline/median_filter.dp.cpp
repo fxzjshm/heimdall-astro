@@ -7,8 +7,9 @@
 
 #include "hd/median_filter.h"
 
-#include <boost/compute.hpp>
 #include "hd/utils.dp.hpp"
+#include <boost/compute/algorithm.hpp>
+#include <boost/compute/utility/source.hpp>
 
 /*
   Note: The implementations of median3-5 here can be derived from
@@ -77,10 +78,14 @@ inline float median5(float a, float b, float c, float d, float e) {
 
 const std::string common_source = type_define_source();
 
-using boost::compute::buffer_iterator;
+struct median_filter3_kernel {
+    const buffer_iterator<hd_float> in;
+	unsigned int    count;
+	median_filter3_kernel(const buffer_iterator<hd_float> in_,
+	                      unsigned int count_)
+		: in(in_), count(count_) {}
 
-auto median_filter3_kernel (const buffer_iterator<hd_float> in,
-	                        unsigned int count) {
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE(hd_float, median_filter3_kernel_closure, (unsigned int i), (in, count), {
         // Note: We shrink the window near boundaries
 		if( i > 0 && i < count-1 ) {
@@ -94,10 +99,17 @@ auto median_filter3_kernel (const buffer_iterator<hd_float> in,
 		}
 	});
     return function_with_external_function(median_filter3_kernel_closure, median3_function);
+    }
 };
 
-auto median_filter5_kernel (const buffer_iterator<hd_float> in,
-	                        unsigned int count) {
+struct median_filter5_kernel {
+    const buffer_iterator<hd_float> in;
+	unsigned int    count;
+	median_filter5_kernel(const buffer_iterator<hd_float> in_,
+	                      unsigned int count_)
+		: in(in_), count(count_) {}
+
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE(hd_float, median_filter5_kernel_closure, (unsigned int i), (in, count), {
         // Note: We shrink the window near boundaries
 		if( i > 1 && i < count-2 ) {
@@ -117,9 +129,15 @@ auto median_filter5_kernel (const buffer_iterator<hd_float> in,
 		}
     });
     return function_with_external_function(median_filter5_kernel_closure, {median3_function, median4_function, median5_function});
+    }
 };
 
-auto median_scrunch3_kernel(const buffer_iterator<hd_float> in) {
+struct median_scrunch3_kernel {
+    const buffer_iterator<hd_float> in;
+	median_scrunch3_kernel(const buffer_iterator<hd_float> in_)
+		: in(in_) {}
+
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, median_scrunch3_kernel_closure, (unsigned int i), (in), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_float a = in[3*i+0];
 		hd_float b = in[3*i+1];
@@ -127,9 +145,15 @@ auto median_scrunch3_kernel(const buffer_iterator<hd_float> in) {
 		return median3(a, b, c);
     ) + "}");
     return function_with_external_function(median_scrunch3_kernel_closure, median3_function);
+    }
 };
 
-auto median_scrunch5_kernel(const buffer_iterator<hd_float> in) {
+struct median_scrunch5_kernel {
+    const buffer_iterator<hd_float> in;
+	median_scrunch5_kernel(const buffer_iterator<hd_float> in_)
+		: in(in_) {}
+
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, median_scrunch5_kernel_closure, (unsigned int i), (in), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_float a = in[5*i+0];
 		hd_float b = in[5*i+1];
@@ -139,9 +163,16 @@ auto median_scrunch5_kernel(const buffer_iterator<hd_float> in) {
 		return median5(a, b, c, d, e);
 	) + "}");
     return function_with_external_function(median_scrunch5_kernel_closure, {median3_function, median4_function, median5_function});
+    }
 };
 
-auto median_scrunch3_array_kernel(const buffer_iterator<hd_float> in, hd_size size) {
+struct median_scrunch3_array_kernel {
+    const buffer_iterator<hd_float> in;
+	const hd_size   size;
+	median_scrunch3_array_kernel(const buffer_iterator<hd_float> in_, hd_size size_)
+		: in(in_), size(size_) {}
+
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, median_scrunch3_array_kernel_closure, (unsigned int i), (in, size), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_size array = i / size;
 		hd_size j     = i % size;
@@ -152,9 +183,16 @@ auto median_scrunch3_array_kernel(const buffer_iterator<hd_float> in, hd_size si
 		return median3(a, b, c);
 	) + "}");
     return function_with_external_function(median_scrunch3_array_kernel_closure, median3_function);
+    }
 };
 
-auto median_scrunch5_array_kernel(const buffer_iterator<hd_float> in, hd_size size) {
+struct median_scrunch5_array_kernel {
+    const buffer_iterator<hd_float> in;
+	const hd_size   size;
+	median_scrunch5_array_kernel(const buffer_iterator<hd_float> in_, hd_size size_)
+		: in(in_), size(size_) {}
+
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, median_scrunch5_array_kernel_closure, (unsigned int i), (in, size), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_size array = i / size;
 		hd_size j     = i % size;
@@ -167,6 +205,7 @@ auto median_scrunch5_array_kernel(const buffer_iterator<hd_float> in, hd_size si
 		return median5(a, b, c, d, e);
 	) + "}");
     return function_with_external_function(median_scrunch5_array_kernel_closure, median5_function);
+    }
 };
 
 hd_error median_filter3(const buffer_iterator<hd_float> d_in,
@@ -180,29 +219,26 @@ hd_error median_filter3(const buffer_iterator<hd_float> d_in,
     boost::compute::transform(
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(count),
-        d_out_begin, median_filter3_kernel(d_in, count));
+        d_out_begin, median_filter3_kernel(d_in, count)());
     return HD_NO_ERROR;
 }
 
 hd_error median_filter5(const buffer_iterator<hd_float> d_in,
                         hd_size count,
                         buffer_iterator<hd_float> d_out) {
-    /* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
     boost::compute::buffer_iterator<hd_float> d_out_begin(d_out);
     using boost::compute::make_counting_iterator;
     boost::compute::transform(
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(count),
-        d_out_begin, median_filter5_kernel(d_in, count));
+        d_out_begin, median_filter5_kernel(d_in, count)());
     return HD_NO_ERROR;
 }
 
 hd_error median_scrunch3(const buffer_iterator<hd_float> d_in,
                          hd_size count,
                          buffer_iterator<hd_float> d_out) {
-    /* DPCT_ORIG 	thrust::device_ptr<const hd_float> d_in_begin(d_in);*/
     boost::compute::buffer_iterator<hd_float> d_in_begin(d_in);
-    /* DPCT_ORIG 	thrust::device_ptr<hd_float>       d_out_begin(d_out);*/
     boost::compute::buffer_iterator<hd_float> d_out_begin(d_out);
     if (count == 1) {
         *d_out_begin = d_in_begin[0];
@@ -215,7 +251,7 @@ hd_error median_scrunch3(const buffer_iterator<hd_float> d_in,
         boost::compute::transform(
             boost::compute::make_counting_iterator<unsigned int>(0),
             boost::compute::make_counting_iterator<unsigned int>(out_count),
-            d_out_begin, median_scrunch3_kernel(d_in));
+            d_out_begin, median_scrunch3_kernel(d_in)());
     }
     return HD_NO_ERROR;
 }
@@ -247,7 +283,7 @@ hd_error median_scrunch5(buffer_iterator<hd_float> d_in,
 
             boost::compute::make_counting_iterator<unsigned int>(0),
             boost::compute::make_counting_iterator<unsigned int>(out_count),
-            d_out_begin, median_scrunch5_kernel(d_in));
+            d_out_begin, median_scrunch5_kernel(d_in)());
     }
     return HD_NO_ERROR;
 }
@@ -258,7 +294,6 @@ hd_error median_scrunch3_array(const buffer_iterator<hd_float> d_in,
                                hd_size array_size,
                                hd_size count,
                                buffer_iterator<hd_float> d_out) {
-    /* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
     boost::compute::buffer_iterator<hd_float> d_out_begin(d_out);
     // Note: Truncating here is necessary
     hd_size out_count = count / 3;
@@ -268,7 +303,7 @@ hd_error median_scrunch3_array(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(total),
         d_out_begin,
-        median_scrunch3_array_kernel(d_in, array_size));
+        median_scrunch3_array_kernel(d_in, array_size)());
     return HD_NO_ERROR;
 }
 
@@ -287,24 +322,34 @@ hd_error median_scrunch5_array(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(total),
         d_out_begin,
-        median_scrunch5_array_kernel(d_in, array_size));
+        median_scrunch5_array_kernel(d_in, array_size)());
     return HD_NO_ERROR;
 }
 
 template <typename T>
-inline auto mean2_functor() {
-    std::string name = std::string("mean2_functor_") + boost::compute::type_name<T>();
-    std::string source = std::string(R"CLC(
-        T func_name (T a, T b) {
-            return (T)0.5 * (a + b);
-        }
-    )CLC");
-    boost::replace_all(source, "T", boost::compute::type_name<T>());
-    boost::replace_all(source, "func_name", name);
-    return boost::compute::make_function_from_source<T (T, T)>(name, source);
+struct mean2_functor {
+    inline auto operator()() const {
+        std::string type_name = boost::compute::type_name<T>();
+        std::string name = std::string("mean2_functor_") + type_name;
+        std::string source(BOOST_COMPUTE_STRINGIZE_SOURCE(
+            inline T mean2_functor (T a, T b) {
+                return (T)0.5 * (a + b);
+            }
+        ));
+        boost::replace_first(source, "mean2_functor", name);
+        auto func = boost::compute::make_function_from_source<T (T, T)>(name, source);
+        func.define("T", type_name);
+        return func;
+    }
 };
 
-auto mean_scrunch2_array_kernel (const buffer_iterator<hd_float> in, hd_size size) {
+struct mean_scrunch2_array_kernel {
+    const buffer_iterator<hd_float> in;
+	const hd_size   size;
+	mean_scrunch2_array_kernel(const buffer_iterator<hd_float> in_, hd_size size_)
+		: in(in_), size(size_) {}
+
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, mean_scrunch2_array_kernel_closure, (unsigned int i), (in, size), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_size array = i / size;
 		hd_size j     = i % size;
@@ -314,6 +359,7 @@ auto mean_scrunch2_array_kernel (const buffer_iterator<hd_float> in, hd_size siz
 		return (hd_float)0.5 * (a+b);
     ) + "}");
     return mean_scrunch2_array_kernel_closure;
+    }
 };
 
 // Note: This can operate 'in-place'
@@ -324,7 +370,7 @@ hd_error mean_filter2(const buffer_iterator<hd_float> d_in,
     boost::compute::buffer_iterator<hd_float> d_out_begin(d_out);
     boost::compute::adjacent_difference(
         d_in_begin, d_in_begin + count, d_out_begin,
-        mean2_functor<hd_float>());
+        mean2_functor<hd_float>()());
     return HD_NO_ERROR;
 }
 
@@ -342,15 +388,22 @@ hd_error mean_scrunch2_array(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(total),
         d_out_begin,
-        mean_scrunch2_array_kernel(d_in, array_size));
+        mean_scrunch2_array_kernel(d_in, array_size)());
     return HD_NO_ERROR;
 }
 
 // suggested by Ewan Barr (2016 email)
-auto linear_stretch_functor2(const buffer_iterator<hd_float> in, unsigned in_size, float step) {
-    hd_float correction = ((int)(step/2))/step;
+struct linear_stretch_functor2 {
+    const buffer_iterator<hd_float> in;
+    unsigned in_size;
+    float step;
+    float correction;
 
-    BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, linear_stretch_functor2_closure, (unsigned int out_idx), (in, in_size, step, correction), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
+    linear_stretch_functor2(const buffer_iterator<hd_float> in_, unsigned in_size, float step)
+      : in(in_), in_size(in_size), step(step), correction(((int)(step/2))/step){}
+
+    inline auto operator()() const {
+        BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, linear_stretch_functor2_closure, (unsigned int out_idx), (in, in_size, step, correction), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         {
                 float fidx = ((float)out_idx) / step - correction;
                 unsigned idx = (unsigned) fidx;
@@ -360,19 +413,26 @@ auto linear_stretch_functor2(const buffer_iterator<hd_float> in, unsigned in_siz
                         idx = in_size-2;
                 return in[idx] + ((in[idx+1] - in[idx]) * (fidx-idx));
         }
-    ) + "}");
-    return linear_stretch_functor2_closure;
+        ) + "}");
+        return linear_stretch_functor2_closure;
+    }
 };
 
-auto linear_stretch_functor(const buffer_iterator<hd_float> in,
-	                          hd_size in_count, hd_size out_count) {
-    hd_float step = (hd_float(in_count-1)/(out_count-1));
+struct linear_stretch_functor {
+    const buffer_iterator<hd_float> in;
+	hd_float        step;
+	linear_stretch_functor(const buffer_iterator<hd_float> in_,
+	                       hd_size in_count, hd_size out_count)
+		: in(in_), step(hd_float(in_count-1)/(out_count-1)) {}
+
+    inline auto operator()() const {
     BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, linear_stretch_functor_closure, (unsigned int i), (in, step), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_float     x = i * step;
 		unsigned int j = x;
 		return in[j] + ((x-j > 1e-5) ? (x-j)*(in[j+1]-in[j]) : 0.f);
     ) + "}");
     return linear_stretch_functor_closure;
+    }
 };
 
 hd_error linear_stretch(const buffer_iterator<hd_float> d_in,
@@ -393,7 +453,7 @@ hd_error linear_stretch(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(out_count), d_out_begin,
         linear_stretch_functor2(d_in, in_count,
-                                hd_float(out_count - 1) / (in_count - 1)));
+                                hd_float(out_count - 1) / (in_count - 1))());
 
     return HD_NO_ERROR;
 }
