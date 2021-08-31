@@ -41,7 +41,7 @@ using thrust::device_vector;
 #include "hd/ClientSocket.h"
 #include "hd/SocketException.h"
 #include "hd/stopwatch.h"         // For benchmarking
-//#include "hd/write_time_series.h" // For debugging
+#include "hd/write_time_series.h" // For debugging
 
 #include <dedisp.h>
 
@@ -504,8 +504,8 @@ hd_error hd_execute(hd_pipeline pl,
     
     if( beam == 0 && dm_idx == write_dm && first_idx == 0 ) {
       // TESTING
-      //write_device_time_series(time_series, cur_nsamps,
-      //                         cur_dt, "baselined.tim");
+      write_device_time_series(time_series, cur_nsamps,
+                               cur_dt, "baselined.tim");
     }
     // -------------------
     
@@ -521,8 +521,8 @@ hd_error hd_execute(hd_pipeline pl,
     
     if( beam == 0 && dm_idx == write_dm && first_idx == 0 ) {
       // TESTING
-      //write_device_time_series(time_series, cur_nsamps,
-      //                         cur_dt, "normalised.tim");
+      write_device_time_series(time_series, cur_nsamps,
+                               cur_dt, "normalised.tim");
     }
     // ---------
     
@@ -617,9 +617,9 @@ hd_error hd_execute(hd_pipeline pl,
       if( beam == 0 && dm_idx == write_dm && first_idx == 0 &&
           filter_width == 8 ) {
         // TESTING
-        //write_device_time_series(filtered_series,
-        //                         cur_nsamps_filtered,
-        //                         cur_dt, "filtered.tim");
+        write_device_time_series(filtered_series,
+                                 cur_nsamps_filtered,
+                                 cur_dt, "filtered.tim");
       }
       
       hd_size prev_giant_count = d_giant_peaks.size();

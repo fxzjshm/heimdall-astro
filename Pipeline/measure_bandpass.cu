@@ -10,7 +10,7 @@
 #include "hd/get_rms.h"
 
 // TESTING ONLY
-// #include "hd/write_time_series.h"
+#include "hd/write_time_series.h"
 
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
@@ -112,7 +112,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	                      spectrum_count / 5 / 5 / 5 / 5,
 	                      d_bandpass);
 	
-	//write_device_time_series(d_bandpass, nchans, 1.f, "median_spectrum.tim");
+	write_device_time_series(d_bandpass, nchans, 1.f, "median_spectrum.tim");
 	
 	// Now we smooth the spectrum to produce an estimate of the bandpass
 	thrust::device_vector<hd_float> d_scrunched_spectrum(nchans/5);
@@ -139,7 +139,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	}
 	// The bandpass estimate is now in d_bandpass
 	
-	//write_device_time_series(d_bandpass, nchans, 1.f, "bandpass.tim");
+	write_device_time_series(d_bandpass, nchans, 1.f, "bandpass.tim");
 	
 	// Now we estimate the RMS in the bandpass
 	// ---------------------------------------
@@ -197,7 +197,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	                  d_mad.begin(),
 	                  _1 * 1.4826f);
 	
-	//write_device_time_series(d_mad_ptr, nchans, 1.f, "mad.tim");
+	write_device_time_series(d_mad_ptr, nchans, 1.f, "mad.tim");
 	/*
 	// Smooth the band RMS
 	median_scrunch5(d_mad_ptr, nchans,
@@ -224,7 +224,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	//         Probably a bad idea, as that's what the broad-band mitigation
 	//           is for, and we want as much distinction as possible.
 	
-	//write_device_time_series(d_mad_ptr, nchans, 1.f, "smooth_mad.tim");
+	write_device_time_series(d_mad_ptr, nchans, 1.f, "smooth_mad.tim");
 	
 	// Find the median RMS across the band
 	std::vector<hd_float> h_mad(nchans);

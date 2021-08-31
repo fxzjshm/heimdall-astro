@@ -50,6 +50,7 @@ void header_write(BinaryStream& stream,
 	header_write(stream, "za_start", za);
 }
 
+inline
 void write_time_series_header(size_t nbits, float dt, std::ofstream& out_file) {
 	// Write the required header information
 	header_write(out_file, "HEADER_START");
@@ -72,6 +73,7 @@ void write_time_series_header(size_t nbits, float dt, std::ofstream& out_file) {
 } // namespace detail
 
 // Float data type
+inline
 void write_host_time_series(const float* data,
 							size_t       nsamps,
                             float        dt,
@@ -84,6 +86,7 @@ void write_host_time_series(const float* data,
 	file.write((char*)data, size_bytes);
 	file.close();
 }
+inline
 void write_device_time_series(const float* data,
                               size_t      nsamps,
                               float       dt,
@@ -101,6 +104,7 @@ void write_device_time_series(const float* data,
 }
 
 // Integer data type
+inline
 void write_host_time_series(const unsigned int* data,
                             size_t      nsamps,
                             size_t      nbits,
@@ -136,6 +140,7 @@ void write_host_time_series(const unsigned int* data,
 	}
 	write_host_time_series(&float_data[0], nsamps, dt, filename);
 }
+inline
 void write_device_time_series(const unsigned int* data,
                               size_t      nsamps,
                               size_t      nbits,

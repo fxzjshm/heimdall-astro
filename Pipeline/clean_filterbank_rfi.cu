@@ -25,7 +25,7 @@
 #include <thrust/iterator/constant_iterator.h>
 
 // TESTING ONLY
-//#include "hd/write_time_series.h"
+#include "hd/write_time_series.h"
 
 // A simple hashing function taken from Thrust's Monte Carlo example
 inline __host__ __device__
@@ -391,8 +391,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     hd_size nsamps_smooth = hd_size(baseline_length / (2 * dt));
     hd_float* d_series_ptr = thrust::raw_pointer_cast(&d_series[0]);
     
-    //write_device_time_series(d_series_ptr, nsamps_computed,
-    //                         dt, "dm0_dedispersed.tim");
+    write_device_time_series(d_series_ptr, nsamps_computed,
+                             dt, "dm0_dedispersed.tim");
     
     RemoveBaselinePlan baseline_remover;
     error = baseline_remover.exec(d_series_ptr, nsamps_computed, nsamps_smooth);
@@ -400,8 +400,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       return throw_error(error);
     }
     
-    //write_device_time_series(d_series_ptr, nsamps_computed,
-    //                         dt, "dm0_baselined.tim");
+    write_device_time_series(d_series_ptr, nsamps_computed,
+                             dt, "dm0_baselined.tim");
     
     // Normalise
     error = normalise(d_series_ptr, nsamps_computed);
@@ -409,8 +409,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       return throw_error(error);
     }
     
-    //write_device_time_series(d_series_ptr, nsamps_computed,
-    //                         dt, "dm0_normalised.tim");
+    write_device_time_series(d_series_ptr, nsamps_computed,
+                             dt, "dm0_normalised.tim");
     // -------------------------------------------
     
     // Do a simple sigma cut to identify RFI

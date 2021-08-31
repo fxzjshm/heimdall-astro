@@ -7,7 +7,7 @@
 
 #include "hd/remove_baseline.h"
 #include "hd/median_filter.h"
-//#include "hd/write_time_series.h"
+#include "hd/write_time_series.h"
 
 #include <thrust/device_vector.h>
 
@@ -72,8 +72,8 @@ public:
 		linear_stretch(buf2_ptr, sample_count*2+2, baseline_ptr, count);
 	
 		// TESTING
-		//write_device_time_series(d_data, count, 1.f, "pre_baseline.tim");
-		//write_device_time_series(baseline_ptr, count, 1.f, "thebaseline.tim");
+		write_device_time_series(d_data, count, 1.f, "pre_baseline.tim");
+		write_device_time_series(baseline_ptr, count, 1.f, "thebaseline.tim");
 	
 		// Now we just subtract it off
 		thrust::transform(d_data_begin, d_data_begin+count,
@@ -81,7 +81,7 @@ public:
 		                  d_data_begin,
 		                  thrust::minus<hd_float>());
 	
-		//write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
+		write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
 	
 		return HD_NO_ERROR;
 	}
