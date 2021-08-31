@@ -82,8 +82,9 @@ template <typename T> struct plus_one {
 class GiantFinder_impl {
   device_vector_wrapper<hd_float> d_giant_data;
   device_vector_wrapper<hd_size> d_giant_data_inds;
-  device_vector_wrapper<int> d_giant_data_segments;
+  device_vector_wrapper<hd_size> d_giant_data_segments;
   device_vector_wrapper<hd_size> d_giant_data_seg_ids;
+  device_vector_wrapper<hd_size> discard;
 
 public:
   hd_error exec(const boost::compute::buffer_iterator<hd_float> d_data,
@@ -163,12 +164,12 @@ public:
            copy_if(make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
                                                    make_counting_iterator(0u))),*/
         ::copy_if(make_zip_iterator(make_tuple(d_data_begin,
-                                  make_counting_iterator(0u))),
+                                  make_counting_iterator((hd_size)0))),
             /* DPCT_ORIG
                make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
                                                        make_counting_iterator(0u)))+count,*/
                 make_zip_iterator(make_tuple(d_data_begin,
-                                  make_counting_iterator(0u))) + count,
+                                  make_counting_iterator((hd_size)0))) + count,
                 (d_data_begin), // the stencil
                             /* DPCT_ORIG
                                make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
@@ -200,6 +201,7 @@ public:
         d_giant_data_inds.begin(),
         d_giant_data_inds.end(),
         d_giant_data_segments.begin(), not_nearby<hd_size>(merge_dist)());
+    boost::compute::system::default_queue().finish();
 
     // hd_size giant_count_quick = thrust::count(d_giant_data_segments.begin(),
     //                                          d_giant_data_segments.end(),
@@ -219,6 +221,7 @@ public:
         d_giant_data_segments.begin(),
         d_giant_data_segments.end(),
         d_giant_data_seg_ids.begin());
+    boost::compute::system::default_queue().finish();
 
     // We extract the number of giants from the end of the exclusive scan
     // hd_size giant_count = d_giant_data_seg_ids.back() +
@@ -246,6 +249,7 @@ public:
     d_giant_inds.resize(d_giant_inds.size() + giant_count);
     d_giant_begins.resize(d_giant_begins.size() + giant_count);
     d_giant_ends.resize(d_giant_ends.size() + giant_count);
+    discard.resize(d_giant_data_inds.size());
     float_ptr new_giant_peaks_begin = d_giant_peaks.begin() + new_giants_offset;
     size_ptr new_giant_inds_begin = d_giant_inds.begin() + new_giants_offset;
     size_ptr new_giant_begins_begin = d_giant_begins.begin() + new_giants_offset;
@@ -263,18 +267,17 @@ public:
 
     // Now we find the value (snr) and location (time) of each giant's maximum
     hd_size giant_count2 =
-        /* DPCT_ORIG
-           reduce_by_key(thrust::retag<my_tag>(d_giant_data_inds.begin()), */
+        // WARNING: BinaryFunction and BinaryPredicate is swapped for different API between thrust and Boost.Compute
         boost::compute::reduce_by_key(
             d_giant_data_inds.begin(), // the keys
             d_giant_data_inds.end(),
             boost::compute::make_zip_iterator(boost::make_tuple(d_giant_data.begin(),
                                            d_giant_data_inds.begin())),
-            boost::compute::discard_iterator(), // the keys output
+            discard_iterator_wrapper(), // discard.begin(), //, // the keys output
             boost::compute::make_zip_iterator(boost::make_tuple(new_giant_peaks_begin,
                                            new_giant_inds_begin)),
-            nearby<hd_size>(merge_dist)(),
-            maximum_first<std::tuple<hd_float, hd_size>>()())
+            maximum_first<boost::tuple<hd_float, hd_size>>()(),
+            nearby<hd_size>(merge_dist)())
             .second -
         boost::compute::make_zip_iterator(boost::make_tuple(new_giant_peaks_begin,
                                        new_giant_inds_begin));
@@ -304,6 +307,7 @@ public:
                                              plus_one<hd_size>()()),
         d_giant_data_seg_ids.begin(), d_giant_data_segments.begin() + 1,
         new_giant_ends_begin);
+    boost::compute::system::default_queue().finish();
 
     if (giant_count > 0) {
       d_giant_ends.back() = d_giant_data_inds.back() + 1;

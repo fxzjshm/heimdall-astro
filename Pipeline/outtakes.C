@@ -914,6 +914,7 @@ private:
 	                         d_giant_labels.end(),
 	                         d_giant_segments.begin(),
 	                         std::not_equal_to<hd_size>());
+    boost::compute::system::default_queue().finish();
 	if( giant_count > 0 ) {
 		d_giant_segments[0] = 1;
 	}

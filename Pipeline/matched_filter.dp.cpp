@@ -28,6 +28,7 @@ public:
     m_scanned.resize(count + 1, 0);
 
     boost::compute::inclusive_scan(d_in_begin, d_in_end, m_scanned.begin() + 1);
+    boost::compute::system::default_queue().finish();
     return HD_NO_ERROR;
   }
 
@@ -66,6 +67,7 @@ public:
         // in_range1.begin(), in_range1.end(), in_range2.begin(), d_out_begin,
         in_range1_begin, in_range1_end, in_range2_begin, d_out_begin,
         boost::compute::minus<T>());
+    boost::compute::system::default_queue().finish();
 
     return HD_NO_ERROR;
   }

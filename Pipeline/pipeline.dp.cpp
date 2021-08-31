@@ -477,8 +477,6 @@ hd_error hd_execute(hd_pipeline pl,
       cout << "\tBaselining and normalising each beam..." << endl;
     }
 
-/* DPCT_ORIG     hd_float* time_series =
- * thrust::raw_pointer_cast(&pl->d_time_series[0]);*/
     boost::compute::buffer_iterator<hd_float> time_series = pl->d_time_series.begin();
 
     // Copy the time series to the device and convert to floats
@@ -537,6 +535,7 @@ hd_error hd_execute(hd_pipeline pl,
         boost::compute::make_constant_iterator(hd_float(1.0) / rms),
         pl->d_time_series.begin(),
         boost::compute::multiplies<hd_float>());
+    boost::compute::system::default_queue().finish();
     stop_timer(normalise_timer);
     
     if( beam == 0 && dm_idx == write_dm && first_idx == 0 ) {
@@ -636,6 +635,7 @@ hd_error hd_execute(hd_pipeline pl,
             boost::compute::buffer_iterator<hd_float>(filtered_series),
             boost::compute::multiplies<hd_float>());
       }
+      boost::compute::system::default_queue().finish();
 
       stop_timer(filter_timer);
       
@@ -688,6 +688,7 @@ hd_error hd_execute(hd_pipeline pl,
           d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
           d_giant_ends.begin() + prev_giant_count,
           /*first_idx +*/ (_1 + rel_cur_filtered_offset) * cur_scrunch);
+      boost::compute::system::default_queue().finish();
 
       d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx);
       d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
@@ -793,6 +794,7 @@ hd_error hd_execute(hd_pipeline pl,
     boost::compute::gather(
         d_group_dm_inds.begin(), d_group_dm_inds.end(),
         d_dm_list.begin(), d_group_dms.begin());
+    boost::compute::system::default_queue().finish();
 
     // Device to host transfer of candidates
     // h_group_peaks = d_group_peaks;

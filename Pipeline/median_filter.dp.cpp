@@ -220,6 +220,7 @@ hd_error median_filter3(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(count),
         d_out_begin, median_filter3_kernel(d_in, count)());
+    boost::compute::system::default_queue().finish();
     return HD_NO_ERROR;
 }
 
@@ -232,6 +233,7 @@ hd_error median_filter5(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(count),
         d_out_begin, median_filter5_kernel(d_in, count)());
+    boost::compute::system::default_queue().finish();
     return HD_NO_ERROR;
 }
 
@@ -252,6 +254,7 @@ hd_error median_scrunch3(const buffer_iterator<hd_float> d_in,
             boost::compute::make_counting_iterator<unsigned int>(0),
             boost::compute::make_counting_iterator<unsigned int>(out_count),
             d_out_begin, median_scrunch3_kernel(d_in)());
+        boost::compute::system::default_queue().finish();
     }
     return HD_NO_ERROR;
 }
@@ -280,10 +283,10 @@ hd_error median_scrunch5(buffer_iterator<hd_float> d_in,
         hd_size out_count = count / 5;
         using boost::compute::make_counting_iterator;
         boost::compute::transform(
-
             boost::compute::make_counting_iterator<unsigned int>(0),
             boost::compute::make_counting_iterator<unsigned int>(out_count),
             d_out_begin, median_scrunch5_kernel(d_in)());
+        boost::compute::system::default_queue().finish();
     }
     return HD_NO_ERROR;
 }
@@ -304,6 +307,7 @@ hd_error median_scrunch3_array(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(total),
         d_out_begin,
         median_scrunch3_array_kernel(d_in, array_size)());
+    boost::compute::system::default_queue().finish();
     return HD_NO_ERROR;
 }
 
@@ -323,6 +327,7 @@ hd_error median_scrunch5_array(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(total),
         d_out_begin,
         median_scrunch5_array_kernel(d_in, array_size)());
+    boost::compute::system::default_queue().finish();
     return HD_NO_ERROR;
 }
 
@@ -367,6 +372,7 @@ hd_error mean_filter2(const buffer_iterator<hd_float> d_in,
     boost::compute::adjacent_difference(
         d_in_begin, d_in_begin + count, d_out_begin,
         mean2_functor<hd_float>()());
+    boost::compute::system::default_queue().finish();
     return HD_NO_ERROR;
 }
 
@@ -385,6 +391,7 @@ hd_error mean_scrunch2_array(const buffer_iterator<hd_float> d_in,
         boost::compute::make_counting_iterator<unsigned int>(total),
         d_out_begin,
         mean_scrunch2_array_kernel(d_in, array_size)());
+    boost::compute::system::default_queue().finish();
     return HD_NO_ERROR;
 }
 
@@ -399,8 +406,7 @@ struct linear_stretch_functor2 {
       : in(in_), in_size(in_size), step(step), correction(((int)(step/2))/step){}
 
     inline auto operator()() const {
-        BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(hd_float, linear_stretch_functor2_closure, (unsigned int out_idx), (in, in_size, step, correction), "{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
-        {
+        BOOST_COMPUTE_CLOSURE(hd_float, linear_stretch_functor2_closure, (unsigned int out_idx), (in, in_size, step, correction), {
                 float fidx = ((float)out_idx) / step - correction;
                 unsigned idx = (unsigned) fidx;
                 if (fidx<0)
@@ -408,8 +414,7 @@ struct linear_stretch_functor2 {
                 else if (idx + 1 >= in_size)
                         idx = in_size-2;
                 return in[idx] + ((in[idx+1] - in[idx]) * (fidx-idx));
-        }
-        ) + "}");
+        });
         return linear_stretch_functor2_closure;
     }
 };
@@ -445,11 +450,11 @@ hd_error linear_stretch(const buffer_iterator<hd_float> d_in,
     //                   d_out_begin,
     //                   linear_stretch_functor(d_in, in_count, out_count));
     boost::compute::transform(
-
         boost::compute::make_counting_iterator<unsigned int>(0),
         boost::compute::make_counting_iterator<unsigned int>(out_count), d_out_begin,
         linear_stretch_functor2(d_in, in_count,
                                 hd_float(out_count - 1) / (in_count - 1))());
+    boost::compute::system::default_queue().finish();
 
     return HD_NO_ERROR;
 }

@@ -7,16 +7,20 @@
 
 #include "hd/merge_candidates.h"
 
-#include "hd/utils/wrappers.dp.hpp"
+#include "hd/utils/func_with_source_string.dp.hpp"
 #include "hd/utils/reduce_by_key.dp.hpp"
+#include "hd/utils/type_defines.dp.hpp"
+#include "hd/utils/wrappers.dp.hpp"
 #include <boost/compute/algorithm.hpp>
 #include <boost/compute/iterator.hpp>
 
 typedef boost::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
 
+const std::string common_source = type_define_source() + "typedef " + boost::compute::type_name<candidate_tuple>() + " TUPLE_TYPENAME;";
+
 struct merge_candidates_functor {
     inline auto operator()() const {
-    BOOST_COMPUTE_FUNCTION(candidate_tuple, merge_candidates_functor, (const candidate_tuple &c1, const candidate_tuple &c2), {
+    std::string source = ("{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_float snr1 = boost_tuple_get(c1, 0);
         hd_size ind1 = boost_tuple_get(c1, 1);
         hd_size begin1 = boost_tuple_get(c1, 2);
@@ -34,7 +38,7 @@ struct merge_candidates_functor {
         hd_size members2 = boost_tuple_get(c2, 6);
 
         if (snr1 >= snr2) {
-            return {
+            return (TUPLE_TYPENAME){
                 snr1, ind1,
                 //(begin1+begin2)/2,
                 //(end1+end2)/2,
@@ -46,7 +50,7 @@ struct merge_candidates_functor {
                 members1 + members2
             };
         } else {
-            return {
+            return (TUPLE_TYPENAME){
                 snr2, ind2,
                 //(begin1+begin2)/2,
                 //(end1+end2)/2,
@@ -56,8 +60,9 @@ struct merge_candidates_functor {
                 dm_ind2, members1 + members2
             };
         }
-    });
-    return merge_candidates_functor;
+    }));
+    auto func = BOOST_COMPUTE_FUNCTION_WITH_NAME_AND_SOURCE_STRING(candidate_tuple, "merge_candidates_functor", (const candidate_tuple c1, const candidate_tuple c2), source.c_str());
+    return func;
     }
 };
 
@@ -91,9 +96,12 @@ hd_error merge_candidates(hd_size count,
     // Sort by labels and remember permutation
     device_vector_wrapper<hd_size> d_permutation(count);
     boost::compute::iota(d_permutation.begin(), d_permutation.end(), 0);
+    boost::compute::system::default_queue().finish();
     boost::compute::sort_by_key(labels_begin, labels_begin + count, d_permutation.begin());
+    boost::compute::system::default_queue().finish();
 
     // Merge giants into groups according to the label
+    // WARNING: BinaryFunction and BinaryPredicate is swapped for different API between thrust and Boost.Compute
     boost::compute::detail::dispatch_reduce_by_key_no_count_check(
         labels_begin, labels_begin + count,
         boost::compute::make_permutation_iterator(
@@ -105,7 +113,7 @@ hd_error merge_candidates(hd_size count,
                                                                 cand_dm_inds_begin,
                                                                 cand_members_begin)),
             d_permutation.begin()),
-        boost::compute::discard_iterator(), // keys output
+        discard_iterator_wrapper(), // keys output
         boost::compute::make_zip_iterator(boost::make_tuple(group_peaks_begin,
                                                             group_inds_begin,
                                                             group_begins_begin,
@@ -113,8 +121,9 @@ hd_error merge_candidates(hd_size count,
                                                             group_filter_inds_begin,
                                                             group_dm_inds_begin,
                                                             group_members_begin)),
-        boost::compute::equal_to<hd_size>(), merge_candidates_functor()(),
+        merge_candidates_functor()(), boost::compute::equal_to<hd_size>(),
         boost::compute::system::default_queue());
+    boost::compute::system::default_queue().finish();
 
     return HD_NO_ERROR;
 }

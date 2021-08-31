@@ -89,17 +89,17 @@ struct zap_fb_rfi_functor {
       mwc64x_state_t rng = {seed, 1};
       result = 0;
       // Iterate over channels in the word
-      for( int k=0; k<int(sizeof(WordType)*8); k+=nbits ) {
+      for( int k=0; k<(int)(sizeof(WordType)*8); k+=nbits ) {
         unsigned int min_t = t > max_resample_dist ?
           t - max_resample_dist : 0;
         unsigned int max_t = t < nsamps-1 - max_resample_dist ?
           t + max_resample_dist : nsamps-1;
-        unsigned int new_t = (MWC64X_NextUint(rng) % (max_t - min_t)) + min_t;
+        unsigned int new_t = (MWC64X_NextUint(&rng) % (max_t - min_t)) + min_t;
         // Avoid replacing with another bad sample
         // Note: We must limit the number of attempts here for speed
         int attempts = 0;
         while( mask[new_t] && ++attempts < MAX_RESAMPLE_ATTEMPTS+1 ) {
-          new_t = (MWC64X_NextUint(rng) % (max_t - min_t)) + min_t;
+          new_t = (MWC64X_NextUint(&rng) % (max_t - min_t)) + min_t;
         }
         
         WordType val = (in[new_t*stride + c] >> k) & bitmask;
@@ -240,6 +240,7 @@ hd_error zap_filterbank_rfi(const int* h_mask, const hd_byte* h_in,
       d_out.begin(),
       zap_fb_rfi_functor<WordType>(d_mask_ptr, d_in_ptr, stride, nbits, nsamps,
                                    max_resample_dist)());
+  boost::compute::system::default_queue().finish();
   // Copy back to the host
   boost::compute::copy(d_out.begin(), d_out.end(), (WordType *)h_out);
 
@@ -350,6 +351,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       boost::compute::counting_iterator<unsigned int> end((g+nsamps_gulp)*stride);
       boost::compute::for_each(
           begin, end, zapit());
+      boost::compute::system::default_queue().finish();
     }
     
     h_in_copy.resize(nsamps*stride*sizeof(WordType));
@@ -444,6 +446,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     boost::compute::transform(
         d_series.begin(), d_series.end(), d_rfi_mask.begin(),
         is_rfi<hd_float>(rfi_tol)());
+    boost::compute::system::default_queue().finish();
 
     // Note: The filtered output is shorter by boxcar_max samps
     //         and offset by boxcar_max/2 samps.
@@ -467,6 +470,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           d_filtered.begin(), d_filtered.end(), norm_val_iter,
           d_filtered.begin(),
           boost::compute::multiplies<hd_float>());
+      boost::compute::system::default_queue().finish();
 
       //hd_size filter_offset = (boxcar_max-1)/2+1;
       hd_size filter_offset = boxcar_max / 2;
@@ -476,6 +480,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           d_filtered.begin(), d_filtered.end(),
           d_filtered_rfi_mask.begin() + filter_offset,
           is_rfi<hd_float>(rfi_tol)());
+      boost::compute::system::default_queue().finish();
 
       // Filter the RFI mask
       // Note: This ensures we zap all samples contributing to the peak
@@ -490,6 +495,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           d_rfi_mask.begin(), d_rfi_mask.end(), d_filtered_rfi_mask.begin(),
           d_rfi_mask.begin(),
           boost::compute::logical_or<int>());
+      boost::compute::system::default_queue().finish();
     }
     // h_rfi_mask = d_rfi_mask;
     device_to_host_copy(d_rfi_mask, h_rfi_mask);

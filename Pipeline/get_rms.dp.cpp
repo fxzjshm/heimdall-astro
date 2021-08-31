@@ -52,6 +52,7 @@ public:
 
         boost::compute::transform(d_data_begin, d_data_begin + count, buf1.begin(),
                                absolute_val<hd_float>()());
+        boost::compute::system::default_queue().finish();
 
         for( hd_size size=count; size>1; size/=5 ) {
 			median_scrunch5(buf1_ptr, size, buf2_ptr);
@@ -87,6 +88,7 @@ hd_error normalise(boost::compute::buffer_iterator<hd_float> d_data, hd_size cou
                            boost::compute::make_constant_iterator(hd_float(1.0) / rms),
                            d_data_begin,
                            boost::compute::multiplies<hd_float>());
+        boost::compute::system::default_queue().finish();
 
         return HD_NO_ERROR;
 }

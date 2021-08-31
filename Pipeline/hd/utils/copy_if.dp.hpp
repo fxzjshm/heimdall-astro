@@ -125,6 +125,7 @@ inline OutputIterator copy_if(InputIterator1 first,
                               stencil + n,
                               predicates.begin(),
                               predicate); // thrust::predicate_to_integral(pred));
+    boost::compute::system::default_queue().finish();
 
     // scan {0,1} predicates
     boost::compute::vector<IndexType> scatter_indices(n);
@@ -133,6 +134,7 @@ inline OutputIterator copy_if(InputIterator1 first,
                                    scatter_indices.begin(),
                                    static_cast<IndexType>(0),
                                    boost::compute::plus<IndexType>());
+    boost::compute::system::default_queue().finish();
 
     // scatter the true elements
     ::scatter_if(first,
@@ -141,6 +143,7 @@ inline OutputIterator copy_if(InputIterator1 first,
                  predicates.begin(),
                  result,
                  boost::compute::identity<IndexType>());
+    boost::compute::system::default_queue().finish();
 
     // find the end of the new sequence
     IndexType output_size = scatter_indices[n - 1] + predicates[n - 1];

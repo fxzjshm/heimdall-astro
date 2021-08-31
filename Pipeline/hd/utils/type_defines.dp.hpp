@@ -1,6 +1,8 @@
 #pragma once
 
 #include "hd/types.h"
+#include <string>
+#include <boost/compute/type_traits/type_name.hpp>
 
 #define CL_TYPE_DEFINE(type) (std::string("typedef ") + boost::compute::type_name<type>() + " " + #type + ";")
 

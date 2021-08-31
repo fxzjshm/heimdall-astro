@@ -9,6 +9,7 @@
 
 #include "hd/types.h"
 #include "hd/utils/external_function.dp.hpp"
+#include <boost/compute/utility/source.hpp>
 
 using std::abs;
 using std::max;
@@ -20,7 +21,7 @@ inline bool ranges_overlap(hd_size bi, hd_size ei, hd_size bj, hd_size ej,
 }
 )
 
-DEFINE_BOTH_SIDE(are_coincident,
+const external_function are_coincident_function("are_coincident", BOOST_COMPUTE_STRINGIZE_SOURCE(
 inline bool are_coincident(hd_size samp_i, hd_size samp_j, hd_size begin_i,
                            hd_size begin_j, hd_size end_i, hd_size end_j,
                            hd_size filter_i, hd_size filter_j, hd_size dm_i,
@@ -43,4 +44,4 @@ inline bool are_coincident(hd_size samp_i, hd_size samp_j, hd_size begin_i,
                abs((int)filter_j - (int)filter_i) <= filter_tol &&
                abs((int)dm_j - (int)dm_i) <= dm_tol;
 }
-)
+), {{"hd_size", boost::compute::type_name<hd_size>()}});

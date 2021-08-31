@@ -12,6 +12,7 @@
 #include "hd/utils.dp.hpp"
 
 #include <boost/compute/algorithm.hpp>
+#include <boost/compute/utility/source.hpp>
 
 /*
 // Lexicographically projects 3D integer coordinates onto a 1D coordinate
@@ -103,7 +104,7 @@ struct trace_equivalency_chain {
     inline auto operator()() const {
         std::string type_name = boost::compute::type_name<T>();
         std::string name = std::string("trace_equivalency_chain_") + type_name;
-        auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(void, name, (unsigned int old_label), (new_labels), BOOST_COMPUTE_STRINGIZE_SOURCE({
+        auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(void, name.c_str(), (unsigned int old_label), (new_labels), BOOST_COMPUTE_STRINGIZE_SOURCE({
 
         T cur_label = old_label;
 		while( new_labels[cur_label] != cur_label ) {
@@ -171,8 +172,8 @@ struct cluster_functor {
 		  time_tol(time_tol_), filter_tol(filter_tol_), dm_tol(dm_tol_) {}
 
     inline auto operator()() const {
-	BOOST_COMPUTE_CLOSURE(void, cluster_functor, (unsigned int i),
-        (count, d_samp_inds, d_begins, d_ends, d_filters, d_dms, d_labels, time_tol, filter_tol, dm_tol), {
+	BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(void, cluster_functor, (unsigned int i),
+        (count, d_samp_inds, d_begins, d_ends, d_filters, d_dms, d_labels, time_tol, filter_tol, dm_tol), "{" + type_define_source() + BOOST_COMPUTE_STRINGIZE_SOURCE(
         hd_size samp_i   = d_samp_inds[i];
 		hd_size begin_i  = d_begins[i];
 		hd_size end_i    = d_ends[i];
@@ -198,7 +199,7 @@ struct cluster_functor {
                 d_labels[i] = min((int)d_labels[i], (int)d_labels[j]);
              }
 		}
-	});
+	}));
     return function_with_external_function(cluster_functor, are_coincident_function);
     }
 };
@@ -233,6 +234,7 @@ hd_error label_candidate_clusters(hd_size            count,
 
     boost::compute::buffer_iterator<hd_size> d_labels_begin(d_labels);
     boost::compute::iota(d_labels_begin, d_labels_begin + count, 0);
+    boost::compute::system::default_queue().finish();
 
     // This just does a brute-force O(N^2) search for neighbours and
 	//   re-labels as the minimum label over neighbours.
@@ -242,6 +244,7 @@ hd_error label_candidate_clusters(hd_size            count,
                                                  d_cands.ends, d_cands.filter_inds,
                                                  d_cands.dm_inds, d_labels, time_tol,
                                                  filter_tol, dm_tol)());
+        boost::compute::system::default_queue().finish();
     /*
 	using thrust::make_transform_iterator;
 	using thrust::make_zip_iterator;
@@ -367,13 +370,14 @@ hd_error label_candidate_clusters(hd_size            count,
     // *((void **)&d_counter_address) = d_counter.get_ptr();
     boost::compute::buffer_iterator<unsigned int> d_counter_ptr(d_counter_address);
     *d_counter_ptr = 0;
-
+*/
     boost::compute::for_each(boost::compute::make_counting_iterator<unsigned int>(0),
                              boost::compute::make_counting_iterator<unsigned int>(count),
-                             trace_equivalency_chain<hd_size>(d_labels));
+                             trace_equivalency_chain<hd_size>(d_labels)());
+    boost::compute::system::default_queue().finish();
 
     //std::cout << "Total chain iterations: " << *d_counter_ptr << std::endl;
-*/
+
 
 	// Finally we do a quick count of the number of unique labels
 	//   This is efficiently achieved by checking where new labels are
@@ -383,6 +387,7 @@ hd_error label_candidate_clusters(hd_size            count,
         boost::compute::transform(d_labels_begin, d_labels_begin + count,
                                   boost::compute::make_counting_iterator<hd_size>(0),
                                   d_label_roots.begin(), boost::compute::equal_to<hd_size>());
+        boost::compute::system::default_queue().finish();
         *label_count =
             boost::compute::count_if(
                           d_label_roots.begin(), d_label_roots.end(),

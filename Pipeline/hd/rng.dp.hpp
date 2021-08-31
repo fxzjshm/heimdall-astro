@@ -5,8 +5,10 @@
 
 // MWC64X by David Thomas, dt10@imperial.ac.uk
 // acquired from http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html, licensed under BSD license,
-// with `inline` modifier added and "skip_mwc.cl" mannually included
-external_function mwc64x_rng("mwc64x_rng", BOOST_COMPUTE_STRINGIZE_SOURCE(
+// with `inline` modifier added, "skip_mwc.cl" mannually included
+// and enums larger than MAX_INT are re-written in const values
+// to silence `warning: ISO C restricts enumerator values to range of 'int' (4294883355 is too large)`
+external_function mwc64x_rng("mwc64x_rng", R"CLC(
 /*
 Part of MWC64X by David Thomas, dt10@imperial.ac.uk
 This is provided under BSD, full license is with the main package.
@@ -84,7 +86,8 @@ inline uint2 MWC_SeedImpl_Mod64(ulong A, ulong M, uint vecSize, uint vecOffset, 
 	// being a bit poor in ones - once you've decided that, one constant is as
 	// good as any another. There is no deep mathematical reason for it, I just
 	// generated a random number.
-	enum{ MWC_BASEID = 4077358422479273989UL };
+    #define MWC_BASEID (4077358422479273989UL)
+	// enum{ MWC_BASEID = 4077358422479273989UL };
 	
 	ulong dist=streamBase + (get_global_id(0)*vecSize+vecOffset)*streamGap;
 	ulong m=MWC_PowMod64(A, dist, M);
@@ -98,8 +101,10 @@ inline uint2 MWC_SeedImpl_Mod64(ulong A, ulong M, uint vecSize, uint vecOffset, 
 //! Represents the state of a particular generator
 typedef struct{ uint x; uint c; } mwc64x_state_t;
 
-enum{ MWC64X_A = 4294883355U };
-enum{ MWC64X_M = 18446383549859758079UL };
+#define MWC64X_A (4294883355U)
+#define MWC64X_M (18446383549859758079UL)
+// enum{ MWC64X_A = 4294883355U };
+// enum{ MWC64X_M = 18446383549859758079UL };
 
 inline void MWC64X_Step(mwc64x_state_t *s)
 {
@@ -136,4 +141,4 @@ inline uint MWC64X_NextUint(mwc64x_state_t *s)
 }
 
 #endif
-));
+)CLC");

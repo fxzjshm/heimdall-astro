@@ -41,7 +41,7 @@ public:
 		}
 	
 		// As we will use median-of-5, round to sample_count times a power of five
-		hd_size nscrunches  = (hd_size)(log(count/sample_count)/log(5.));
+		hd_size nscrunches  = (hd_size)(std::log(count/sample_count)/std::log(5.));
         hd_size count_round = std::pow<double>(5., nscrunches) * sample_count;
 
         buf1.resize(count_round);
@@ -84,6 +84,7 @@ public:
                     d_data_begin, d_data_begin + count, baseline.begin(),
                     d_data_begin,
                     boost::compute::minus<hd_float>());
+        boost::compute::system::default_queue().finish();
 
         //write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
 	

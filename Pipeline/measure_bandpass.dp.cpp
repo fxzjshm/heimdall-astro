@@ -97,6 +97,7 @@ hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_filte
             d_sample_spectra1.begin() + i * nchans,
             unpack_functor<WordType>(d_in_cvt, nbits)());
     }
+    boost::compute::system::default_queue().finish();
 
     // Compute the 'remedian' (recursive median) of the sample spectra
     // Note: We do this instead of a proper median for performance and simplicity
@@ -163,6 +164,9 @@ hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_filte
             d_sample_spectra1.begin() + (i + 1) * nchans,
             d_bandpass_begin, d_sample_spectra1.begin() + i * nchans,
             boost::compute::minus<hd_float>());
+    }
+    boost::compute::system::default_queue().finish();
+    for (hd_size i = 0; i < spectrum_count; ++i) {
         // Take the absolute value
         boost::compute::transform(
             d_sample_spectra1.begin() + i * nchans,
@@ -170,8 +174,10 @@ hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_filte
             d_sample_spectra1.begin() + i * nchans,
             abs_val<hd_float>());
 
+        // boost::compute::system::default_queue().finish();
         //d_sample_rms1[i] = get_rms(d_sample_spectra1_ptr + i*nchans, nchans);
     }
+    boost::compute::system::default_queue().finish();
 
     device_vector_wrapper<hd_float> d_mad(nchans);
     boost::compute::buffer_iterator<hd_float> d_mad_ptr = d_mad.begin();
@@ -200,6 +206,7 @@ hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_filte
     boost::compute::transform(
         d_mad.begin(), d_mad.end(), d_mad.begin(),
         _1 * 1.4826f);
+    boost::compute::system::default_queue().finish();
 
     //write_device_time_series(d_mad_ptr, nchans, 1.f, "mad.tim");
     /*
@@ -232,7 +239,6 @@ hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_filte
 
     // Find the median RMS across the band
     std::vector<hd_float> h_mad(nchans);
-    /* DPCT_ORIG 	thrust::copy(d_mad.begin(), d_mad.end(), h_mad.begin());*/
     boost::compute::copy(d_mad.begin(), d_mad.end(), h_mad.begin());
     std::nth_element(h_mad.begin(), h_mad.begin() + h_mad.size() / 2, h_mad.end());
     *rms = h_mad[h_mad.size() / 2];
