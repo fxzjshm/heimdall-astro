@@ -300,6 +300,7 @@ public:
     boost::compute::scatter_if(d_giant_data_inds.begin(), d_giant_data_inds.end(),
                d_giant_data_seg_ids.begin(), d_giant_data_segments.begin(),
                new_giant_begins_begin);
+    boost::compute::system::default_queue().finish();
     boost::compute::scatter_if(
         boost::compute::make_transform_iterator(d_giant_data_inds.begin(),
                                              plus_one<hd_size>()()),

@@ -464,7 +464,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       filter_plan.exec(d_filtered_ptr, filter_width);
       
       // Normalise the filtered time series (RMS ~ sqrt(time))
-      boost::compute::counting_iterator<hd_float> 
+      boost::compute::constant_iterator<hd_float> 
         norm_val_iter(1.0 / sqrt((hd_float)filter_width));
       boost::compute::transform(
           d_filtered.begin(), d_filtered.end(), norm_val_iter,
