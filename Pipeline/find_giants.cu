@@ -11,7 +11,7 @@
 // TESTING only
 #include "hd/stopwatch.h"
 #include <iostream>
-//#define PRINT_BENCHMARKS
+#define PRINT_BENCHMARKS
 
 #include <thrust/device_vector.h>
 #include <thrust/count.h>

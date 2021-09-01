@@ -426,8 +426,8 @@ hd_error hd_execute(hd_pipeline pl,
   
   if( beam == 0 && first_idx == 0 ) {
     // TESTING
-    //write_host_time_series((unsigned int*)out, nsamps_computed, out_nbits,
-    //                       pl->params.dt, "dedispersed_0.tim");
+    write_host_time_series((unsigned int*)out, nsamps_computed, out_nbits,
+                           pl->params.dt, "dedispersed_0.tim");
   }
   
   if( pl->params.verbosity >= 2 ) {

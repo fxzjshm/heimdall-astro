@@ -85,6 +85,13 @@ void write_host_time_series(const float* data,
 	size_t size_bytes = nsamps*sizeof(float);
 	file.write((char*)data, size_bytes);
 	file.close();
+
+    std::ofstream file2((filename + ".txt").c_str());
+    for(size_t i=0;i<nsamps;i++){
+        file2<<data[i]<<' ';
+    }
+    file2<<std::endl;
+    file2.close();
 }
 inline
 void write_device_time_series(const float* data,
