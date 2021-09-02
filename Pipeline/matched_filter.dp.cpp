@@ -8,7 +8,7 @@
 #include "hd/matched_filter.h"
 #include "hd/strided_range.h"
 #include "hd/utils.dp.hpp"
-
+#include <boost/compute/algorithm/transform.hpp>
 #include <boost/compute/iterator/strided_iterator.hpp>
 
 //#include "hd/write_time_series.h"
