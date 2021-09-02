@@ -486,18 +486,18 @@ hd_error hd_execute(hd_pipeline pl,
     case 8:
         boost::compute::copy((unsigned char *)&pl->h_dm_series[offset],
                              (unsigned char *)&pl->h_dm_series[offset] + cur_nsamps,
-                             pl->d_time_series.begin());
+                             boost::compute::buffer_iterator<unsigned char>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(unsigned char))));
         break;
     case 16:
         boost::compute::copy((unsigned short *)&pl->h_dm_series[offset],
                              (unsigned short *)&pl->h_dm_series[offset] + cur_nsamps,
-                             pl->d_time_series.begin());
+                             boost::compute::buffer_iterator<unsigned short>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(unsigned short))));
         break;
     case 32:
         // Note: 32-bit implies float, not unsigned int
         boost::compute::copy((float *)&pl->h_dm_series[offset],
                              (float *)&pl->h_dm_series[offset] + cur_nsamps,
-                             pl->d_time_series.begin());
+                             boost::compute::buffer_iterator<float>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(float))));
         break;
     default:
       return HD_INVALID_NBITS;
