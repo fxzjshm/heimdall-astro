@@ -12,6 +12,10 @@ Main modifications:
   * see `Pipeline/hd/utils/meta_kernel.dp.hpp`
 * add `device_vector_wrapper` to support `resize(size_type n, T x)`
   * see `Pipeline/hd/utils/wrappers.dp.hpp`
+* add `copy_if` and `transform_if` with parameter stencil
+  * see `Pipeline/hd/utils/copy_if.dp.hpp` and `Pipeline/hd/utils/transform_if.dp.hpp`
+* modified `scatter_if` to remove duplicated buffer offset (this offset has been already included in buffer_iterator)
+  * see `Pipeline/hd/utils/scatter_if.dp.hpp`
 
 Original wiki is at https://sourceforge.net/p/heimdall-astro/wiki/Home/
 Below is the original README
