@@ -11,6 +11,8 @@
 
 #include <boost/compute/iterator/strided_iterator.hpp>
 
+//#include "hd/write_time_series.h"
+
 using boost::compute::buffer_iterator;
 
 // TODO: Add error checking to the methods in here
@@ -23,12 +25,13 @@ public:
     m_max_width = max_width;
     boost::compute::buffer_iterator<T> d_in_begin(d_in);
     boost::compute::buffer_iterator<T> d_in_end(d_in + count);
+    //write_device_time_series(d_in_begin, count, 1.f, "matched_filter.prep.d_in.tim");
 
     // Note: One extra element so that we include the final value
     m_scanned.resize(count + 1, 0);
-
     boost::compute::inclusive_scan(d_in_begin, d_in_end, m_scanned.begin() + 1);
     boost::compute::system::default_queue().finish();
+    //write_device_time_series(m_scanned.begin(), count + 1, 1.f, "matched_filter.prep.m_scanned.tim");
     return HD_NO_ERROR;
   }
 
@@ -58,15 +61,19 @@ public:
     strided_range<Iterator> in_range2(
         m_scanned.begin() + offset - behind,
         m_scanned.begin() + offset - behind + out_count, stride);
-    boost::compute::strided_iterator in_range1_begin(m_scanned.begin() + offset + ahead, stride);
-    boost::compute::strided_iterator in_range1_end(m_scanned.begin() + offset + ahead + out_count, stride);
-    boost::compute::strided_iterator in_range2_begin(m_scanned.begin() + offset - behind, stride);
-    boost::compute::strided_iterator in_range2_end(m_scanned.begin() + offset - behind + out_count, stride);
+    boost::compute::strided_iterator<Iterator> in_range1_begin(m_scanned.begin() + offset + ahead, stride);
+    boost::compute::strided_iterator<Iterator> in_range1_end(m_scanned.begin() + offset + ahead + out_count, stride);
+    boost::compute::strided_iterator<Iterator> in_range2_begin(m_scanned.begin() + offset - behind, stride);
+    boost::compute::strided_iterator<Iterator> in_range2_end(m_scanned.begin() + offset - behind + out_count, stride);
+
+    //write_device_time_series(in_range1_begin, out_count, 1.f, "matched_filter.exec.in_range1.tim");
+    //write_device_time_series(in_range2_begin, out_count, 1.f, "matched_filter.exec.in_range2.tim");
 
     boost::compute::transform(
         // in_range1.begin(), in_range1.end(), in_range2.begin(), d_out_begin,
         in_range1_begin, in_range1_end, in_range2_begin, d_out_begin,
         boost::compute::minus<T>());
+    //write_device_time_series(d_out_begin, out_count, 1.f, "matched_filter.exec.d_out.tim");
     boost::compute::system::default_queue().finish();
 
     return HD_NO_ERROR;

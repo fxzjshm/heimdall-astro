@@ -503,6 +503,7 @@ hd_error hd_execute(hd_pipeline pl,
       return HD_INVALID_NBITS;
     }
     stop_timer(copy_timer);
+    //write_device_time_series(time_series, cur_nsamps, 1.f, "after_copy.tim");
     
     // Remove the baseline
     // -------------------
@@ -561,8 +562,6 @@ hd_error hd_execute(hd_pipeline pl,
     stop_timer(filter_timer);
     // --------------------------
 
-/* DPCT_ORIG     hd_float* filtered_series =
- * thrust::raw_pointer_cast(&pl->d_filtered_series[0]);*/
     boost::compute::buffer_iterator<hd_float> filtered_series = pl->d_filtered_series.begin();
 
     // Note: Filtering is done using a combination of tscrunching and
@@ -609,6 +608,7 @@ hd_error hd_execute(hd_pipeline pl,
       hd_size cur_nsamps_filtered = ((max_nsamps_filtered-1)
                                      / rel_tscrunch_width + 1);
       hd_size cur_scrunch = cur_dm_scrunch * rel_tscrunch_width;
+      //write_device_time_series(filtered_series, cur_nsamps_filtered, 1.f, "pre_rescaled.tim");
       
       if (pl->params.boxcar_renorm)
       {
@@ -636,16 +636,17 @@ hd_error hd_execute(hd_pipeline pl,
             boost::compute::multiplies<hd_float>());
       }
       boost::compute::system::default_queue().finish();
+      //write_device_time_series(filtered_series, cur_nsamps_filtered, 1.f, "post_rescaled.tim");
 
       stop_timer(filter_timer);
       
-      if( beam == 0 && dm_idx == write_dm && first_idx == 0 &&
-          filter_width == 8 ) {
+      // if( beam == 0 && dm_idx == write_dm && first_idx == 0 &&
+      //     filter_width == 8 ) {
         // TESTING
         //write_device_time_series(filtered_series,
         //                         cur_nsamps_filtered,
         //                         cur_dt, "filtered.tim");
-      }
+      //}
       
       hd_size prev_giant_count = d_giant_peaks.size();
       

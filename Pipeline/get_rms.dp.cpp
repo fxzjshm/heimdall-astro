@@ -7,6 +7,7 @@
 
 #include "hd/get_rms.h"
 #include "hd/median_filter.h"
+//#include "hd/write_time_series.h"
 #include "hd/utils/wrappers.dp.hpp"
 #include <boost/compute/algorithm/transform.hpp>
 #include <boost/compute/lambda.hpp>
@@ -56,6 +57,8 @@ public:
 
         for( hd_size size=count; size>1; size/=5 ) {
 			median_scrunch5(buf1_ptr, size, buf2_ptr);
+            // write_device_time_series(buf1_ptr, size, 1.f, "median_scrunch5_size" + std::to_string(size) + "_in.tim");
+            // write_device_time_series(buf2_ptr, size/5, 1.f, "median_scrunch5_size" + std::to_string(size) + "_out.tim");
 			std::swap(buf1_ptr, buf2_ptr);
 		}
 		// Note: Result is now at buf1_ptr

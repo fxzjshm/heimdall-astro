@@ -310,6 +310,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   device_vector_wrapper<WordType> d_in((WordType *)h_in,
                                      (WordType *)h_in + nsamps * stride);
   boost::compute::buffer_iterator<WordType> d_in_ptr = d_in.begin();
+  //write_host_time_series((WordType*)h_in, nsamps * stride, sizeof(WordType) * 8, 1.f, "clean_filterbank_rfi_h_in.tim");
 
   device_vector_wrapper<hd_float> d_bandpass(nchans);
   boost::compute::buffer_iterator<hd_float> d_bandpass_ptr = d_bandpass.begin();
@@ -447,6 +448,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
         d_series.begin(), d_series.end(), d_rfi_mask.begin(),
         is_rfi<hd_float>(rfi_tol)());
     boost::compute::system::default_queue().finish();
+    //write_device_time_series(d_rfi_mask.begin(), d_rfi_mask.size(), 1.f, "clean_filterbank_rfi_d_rfi_mask.tim");
 
     // Note: The filtered output is shorter by boxcar_max samps
     //         and offset by boxcar_max/2 samps.
@@ -462,7 +464,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       // Note: The filtered output is shorter by boxcar_max samps
       //         and offset by (boxcar_max-1)/2+1 samps.
       filter_plan.exec(d_filtered_ptr, filter_width);
-      
+
+      //write_device_time_series(d_filtered.begin(), d_filtered.size(), 1.f, "clean_filterbank_rfi_d_filtered_pre_normalize.tim");
       // Normalise the filtered time series (RMS ~ sqrt(time))
       boost::compute::constant_iterator<hd_float> 
         norm_val_iter(1.0 / sqrt((hd_float)filter_width));
@@ -471,6 +474,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           d_filtered.begin(),
           boost::compute::multiplies<hd_float>());
       boost::compute::system::default_queue().finish();
+      //write_device_time_series(d_filtered.begin(), d_filtered.size(), 1.f, "clean_filterbank_rfi_d_filtered_post_normalize.tim");
 
       //hd_size filter_offset = (boxcar_max-1)/2+1;
       hd_size filter_offset = boxcar_max / 2;
@@ -481,6 +485,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           d_filtered_rfi_mask.begin() + filter_offset,
           is_rfi<hd_float>(rfi_tol)());
       boost::compute::system::default_queue().finish();
+      //write_device_time_series(d_filtered_rfi_mask.begin() + filter_offset, d_filtered.size(), 1.f, "clean_filterbank_rfi_d_filtered_rfi_mask_offset" + std::to_string(filter_offset) + ".tim");
 
       // Filter the RFI mask
       // Note: This ensures we zap all samples contributing to the peak
@@ -496,6 +501,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           d_rfi_mask.begin(),
           boost::compute::logical_or<int>());
       boost::compute::system::default_queue().finish();
+      //write_device_time_series(d_rfi_mask.begin(), d_rfi_mask.size(), 1.f, "clean_filterbank_rfi_d_rfi_mask_merged.tim");
     }
     // h_rfi_mask = d_rfi_mask;
     device_to_host_copy(d_rfi_mask, h_rfi_mask);
@@ -510,6 +516,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
                                // TODO: This is somewhat arbitrary
                                nsamps_smooth/4,
                                &h_out[0]);
+    //write_host_time_series((unsigned int*)h_out, nsamps_computed * stride, sizeof(unsigned int) * 8, 1.f, "clean_filterbank_rfi_h_out.tim");
     if( error != HD_NO_ERROR ) {
       return error;
     }

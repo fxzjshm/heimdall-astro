@@ -14,6 +14,8 @@
 #include <boost/compute/algorithm.hpp>
 #include <boost/compute/iterator.hpp>
 
+//#include "hd/write_time_series.h"
+
 typedef boost::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
 
 const std::string common_source = type_define_source() + "typedef " + boost::compute::type_name<candidate_tuple>() + " TUPLE_TYPENAME;";
@@ -97,7 +99,10 @@ hd_error merge_candidates(hd_size count,
     device_vector_wrapper<hd_size> d_permutation(count);
     boost::compute::iota(d_permutation.begin(), d_permutation.end(), 0);
     boost::compute::system::default_queue().finish();
+    //write_device_time_series(labels_begin, count, 1.f, "merge_candidates.d_labels.1.not_tim");
     boost::compute::sort_by_key(labels_begin, labels_begin + count, d_permutation.begin());
+    //write_device_time_series(labels_begin, count, 1.f, "merge_candidates.d_labels.2.not_tim");
+    //write_vector(d_permutation, "merge_candidates.d_permutation.2");
     boost::compute::system::default_queue().finish();
 
     // Merge giants into groups according to the label
@@ -165,6 +170,10 @@ hd_error merge_candidates(hd_size count,
                          boost::compute::make_permutation_iterator(cand_dm_inds_begin, d_key_out_1.begin()) + d_key_out_count_1,
                          group_dm_inds_begin);
     boost::compute::system::default_queue().finish();
+    //write_device_time_series(d_key_out_1.begin(), d_key_out_count_1, 1.f, "merge_candidates.d_key_out_1.not_tim");
+    //write_device_time_series(d_key_out_2.begin(), d_key_out_count_2, 1.f, "merge_candidates.d_key_out_2.not_tim");
+    //write_device_time_series(d_groups.peaks, d_key_out_count_1, 1.f, "merge_candidates.group_peaks_begin.not_tim");
+    //write_device_time_series(d_groups.members, d_key_out_count_2, 1.f, "merge_candidates.group_members_begin.not_tim");
 
     return HD_NO_ERROR;
 }

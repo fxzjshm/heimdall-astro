@@ -50,11 +50,14 @@ public:
         boost::compute::buffer_iterator<hd_float> buf2_ptr = buf2.begin();
 
         // First we re-sample to the rounded size
+        //write_device_time_series(d_data, count, 1.f, "pre_baseline_linear_stretch.tim");
 		linear_stretch(d_data, count, buf1_ptr, count_round);
 	
 		// Then we median scrunch until we reach the sample size
 		for( hd_size size=count_round; size>sample_count; size/=5 ) {
 			median_scrunch5(buf1_ptr, size, buf2_ptr);
+            //write_device_time_series(buf1_ptr, size, 1.f, "median_scrunch5_size" + std::to_string(size) + "_in.tim");
+            //write_device_time_series(buf2_ptr, size/5, 1.f, "median_scrunch5_size" + std::to_string(size) + "_out.tim");
 			std::swap(buf1_ptr, buf2_ptr);
 		}
 		// Note: Output is now at buf1_ptr
@@ -63,11 +66,14 @@ public:
 
         // Then we need to extrapolate the ends
 		linear_stretch(buf1_ptr, sample_count, buf2_ptr+1, sample_count*2);
+        //write_device_time_series(buf1_ptr, sample_count, 1.f, "linear_stretch_1_buf1_ptr.tim");
+        //write_device_time_series(buf2_ptr+1, sample_count*2, 1.f, "linear_stretch_1_buf2_ptr_2n.tim");
         
 		(buf2_begin + 0).write(2*buf2_begin[1] - buf2_begin[2], boost::compute::system::default_queue());
 		(buf2_begin + sample_count*2+1).write((2*buf2_begin[sample_count*2] -
 		                                        buf2_begin[sample_count*2-1]), 
                                               boost::compute::system::default_queue());
+        //write_device_time_series(buf2_ptr, sample_count*2+2, 1.f, "linear_stretch_1_buf2_ptr_2n+2.tim");
 	
 		baseline.resize(count);
         boost::compute::buffer_iterator<hd_float> baseline_ptr = baseline.begin();

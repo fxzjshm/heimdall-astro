@@ -10,7 +10,6 @@
 #include "hd/utils/reduce_by_key.dp.hpp"
 #include <hd/utils/scatter_if.dp.hpp>
 #include <boost/compute/algorithm.hpp>
-#include <boost/compute/algorithm/scatter_if.hpp>
 #include <boost/compute/iterator.hpp>
 #include <boost/compute/lambda.hpp>
 
@@ -21,6 +20,7 @@
 
 // TESTING only
 #include "hd/stopwatch.h"
+//#include "hd/write_time_series.h"
 #include <iostream>
 //#define PRINT_BENCHMARKS
 
@@ -138,6 +138,8 @@ public:
         d_data_begin, d_data_end, greater_than_val<hd_float>(thresh)());
     // std::cout << "GIANT_DATA_COUNT = " << giant_data_count << std::endl;
     // We can bail early if there are no giants at all
+    
+    //write_device_time_series(d_data_begin, count, 1.f, "find_giants.tim");
     if (0 == giant_data_count) {
       // std::cout << "**** Found ZERO giants" << std::endl;
       return HD_NO_ERROR;
@@ -208,6 +210,8 @@ public:
                 greater_than_val<hd_float>(thresh)())
         - d_giant_data_inds.begin();
     assert(giant_data_count2 == giant_data_count2_);
+    //write_vector(d_giant_data, "find_giants.d_giant_data");
+    //write_vector(d_giant_data_inds, "find_giants.d_giant_data_inds");
     
 
 #ifdef PRINT_BENCHMARKS
@@ -230,6 +234,8 @@ public:
         d_giant_data_segments.begin(),
         not_nearby<hd_size>(merge_dist)());
     boost::compute::system::default_queue().finish();
+    //write_vector(d_giant_data_segments, "find_giants.d_giant_data_segments");
+    
 
     // hd_size giant_count_quick = thrust::count(d_giant_data_segments.begin(),
     //                                          d_giant_data_segments.end(),
@@ -240,6 +246,7 @@ public:
       d_giant_data_segments.front() = 0;
       // d_giant_data_segments.front() = 1;
     }
+    //write_vector(d_giant_data_segments, "find_giants.d_giant_data_segments_2");
 
     // thrust::device_vector<hd_size>
     // d_giant_data_seg_ids(d_giant_data_segments.size());
@@ -250,6 +257,7 @@ public:
         d_giant_data_segments.end(),
         d_giant_data_seg_ids.begin());
     boost::compute::system::default_queue().finish();
+    //write_vector(d_giant_data_seg_ids, "find_giants.d_giant_data_seg_ids");
 
     // We extract the number of giants from the end of the exclusive scan
     // hd_size giant_count = d_giant_data_seg_ids.back() +
@@ -323,6 +331,8 @@ public:
             .second -
         new_giant_peaks_begin;
 
+    //write_vector(d_giant_peaks, "find_giants.d_giant_peaks");
+    //write_vector(d_giant_inds, "find_giants.d_giant_inds");
 
 #ifdef PRINT_BENCHMARKS
     boost::compute::system::default_queue().finish();
@@ -339,6 +349,11 @@ public:
       d_giant_data_segments[0] = 1;
     }
 
+    //write_vector(d_giant_data_inds, "find_giants.scatter_if.d_giant_data_inds");
+    //write_vector(d_giant_data_seg_ids, "find_giants.scatter_if.d_giant_data_seg_ids");
+    //write_vector(d_giant_data_segments, "find_giants.scatter_if.d_giant_data_segments");
+    //write_vector(d_giant_begins, "find_giants.d_giant_begins.0");
+    //write_vector(d_giant_ends, "find_giants.d_giant_ends.0");
     boost::compute::scatter_if(d_giant_data_inds.begin(), d_giant_data_inds.end(),
                d_giant_data_seg_ids.begin(), d_giant_data_segments.begin(),
                new_giant_begins_begin);
@@ -351,10 +366,14 @@ public:
         d_giant_data_seg_ids.begin(), d_giant_data_segments.begin() + 1,
         new_giant_ends_begin);
     boost::compute::system::default_queue().finish();
+    //write_vector(d_giant_begins, "find_giants.d_giant_begins");
+    //write_vector(d_giant_ends, "find_giants.d_giant_ends");
 
     if (giant_count > 0) {
       d_giant_ends.back() = d_giant_data_inds.back() + 1;
     }
+    //write_vector(d_giant_begins, "find_giants.d_giant_begins_2");
+    //write_vector(d_giant_ends, "find_giants.d_giant_ends_2");
 
 #ifdef PRINT_BENCHMARKS
     boost::compute::system::default_queue().finish();

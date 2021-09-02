@@ -4,12 +4,14 @@
  *   Licensed under the Academic Free License version 2.1
  *
  ***************************************************************************/
+#pragma once
 
 #include <vector>
 #include <string>
 using std::string;
 #include <fstream>
 
+#include <boost/compute/algorithm/copy.hpp>
 #include <boost/compute/iterator/buffer_iterator.hpp>
 #include <boost/compute/system.hpp>
 
@@ -82,28 +84,39 @@ void write_host_time_series(const float* data,
                             float        dt,
 							string       filename)
 {
+    std::cout << "write_host_time_series: " << filename << std::endl;
 	// Open the output file and write the data
 	std::ofstream file(filename.c_str(), std::ios::binary);
 	detail::write_time_series_header(32, dt, file);
 	size_t size_bytes = nsamps*sizeof(float);
 	file.write((char*)data, size_bytes);
 	file.close();
+
+    std::ofstream file2((filename + ".txt").c_str());
+    for(size_t i=0;i<nsamps;i++){
+        file2<<data[i]<<' ';
+    }
+    file2<<std::endl;
+    file2.close();
 }
 
+/*
+template<class Iterator>
 inline
-void write_device_time_series(const float* data,
+void write_device_time_series(const Iterator data,
                               size_t      nsamps,
                               float       dt,
-                              string      filename)
+                              string      filename,
+                              typename std::enable_if<
+                                  std::is_same<typename std::iterator_traits<Iterator>::value_type, float>::value
+                              >::type* = 0)
 {
 	std::vector<float> h_data(nsamps);
-	try{
-        boost::compute::system::default_queue().memcpy(&h_data[0], data, nsamps * sizeof(float)).wait();
-    } catch(boost::compute::exception e) {
-		throw std::runtime_error(std::string("write_time_series: cudaMemcpy failed: ") + e.what());
-	}
+    // boost::compute::system::default_queue().memcpy(&h_data[0], data, nsamps * sizeof(float)).wait();
+    boost::compute::copy(data, data + nsamps, h_data.begin());
 	write_host_time_series(&h_data[0], nsamps, dt, filename);
 }
+*/
 
 // Integer data type
 inline
@@ -143,19 +156,59 @@ void write_host_time_series(const unsigned int* data,
 	write_host_time_series(&float_data[0], nsamps, dt, filename);
 }
 
+template<class Iterator>
 inline
-void write_device_time_series(const unsigned int* data,
+void write_device_time_series(const Iterator data,
                               size_t      nsamps,
                               size_t      nbits,
                               float       dt,
-                              string      filename)
+                              string      filename,
+                              typename std::enable_if<
+                                  std::is_same<typename std::iterator_traits<Iterator>::value_type, unsigned int>::value
+                              >::type* = 0)
 {
 	size_t nsamps_words = nsamps * nbits/(sizeof(unsigned int)*8);
 	std::vector<unsigned int> h_data(nsamps_words);
-    try{
-        dpct::get_default_queue().memcpy(&h_data[0], data, nsamps_words * sizeof(unsigned int)).wait();
-    } catch(sycl::exception e) {
-		throw std::runtime_error(std::string("write_time_series: memcpy failed: ") + e.what());
-	}
+    boost::compute::copy(data, data + nsamps_words, h_data.begin());
 	write_host_time_series(&h_data[0], nsamps, nbits, dt, filename);
+}
+
+template<class Iterator>
+inline
+void write_device_time_series(const Iterator data,
+                              size_t      nsamps,
+                              float       dt,
+                              string      filename)
+{
+    typedef typename std::iterator_traits<Iterator>::value_type T;
+	std::vector<T> h_data(nsamps);
+    // boost::compute::system::default_queue().memcpy(&h_data[0], data, nsamps * sizeof(float)).wait();
+    boost::compute::copy(data, data + nsamps, h_data.begin());
+    if constexpr (std::is_same<T, float>::value) {
+        write_host_time_series(&h_data[0], nsamps, dt, filename);
+    } else {
+        std::vector<float> h_data_float(nsamps);
+        for (size_t i = 0; i < nsamps; i++) {
+            h_data_float[i] = static_cast<float>(h_data[i]);
+        }
+	    write_host_time_series(&h_data_float[0], nsamps, dt, filename);
+    }
+}
+
+template<typename Vector>
+inline void write_vector(const Vector& v, std::string filename) {
+    std::cout<<"write_vector: "<<filename<<": ";
+    typedef typename Vector::value_type T;
+    std::vector<T> data;
+    data.resize(v.size());
+    boost::compute::copy(v.begin(), v.end(), data.begin());
+    boost::compute::system::default_queue().finish();
+    std::ofstream file2((filename + ".txt").c_str());
+    for(size_t i=0;i<data.size();i++){
+        file2<<data[i]<<' ';
+        if(v.size()<100)std::cout<<data[i]<<' ';
+    }
+    file2<<std::endl;
+    std::cout<<std::endl;
+    file2.close();
 }
