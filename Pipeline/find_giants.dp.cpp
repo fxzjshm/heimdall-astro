@@ -8,6 +8,7 @@
 #include "hd/find_giants.h"
 
 #include "hd/utils/reduce_by_key.dp.hpp"
+#include <hd/utils/scatter_if.dp.hpp>
 #include <boost/compute/algorithm.hpp>
 #include <boost/compute/algorithm/scatter_if.hpp>
 #include <boost/compute/iterator.hpp>
@@ -64,7 +65,7 @@ template <typename T> struct not_nearby {
   inline auto operator()() const {
     std::string type_name = boost::compute::type_name<T>();
     std::string name = std::string("not_nearby_") + type_name;
-    auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(bool, name.c_str(), (T a, T b), (max_dist), BOOST_COMPUTE_STRINGIZE_SOURCE({
+    auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(bool, name.c_str(), (T b, T a), (max_dist), BOOST_COMPUTE_STRINGIZE_SOURCE({
         return b > a + max_dist;
     }));
     func.define("T", type_name);
@@ -74,8 +75,17 @@ template <typename T> struct not_nearby {
 
 template <typename T> struct plus_one {
   inline auto operator()() const {
+    // not sure why lambda is not working here
+    // why is `1` converted to 21845 in kernel file?
+    // why is `static_cast<T>(1)` converted to (93825037334032ul) in kernel file?
+    /*
     using boost::compute::lambda::_1;
     return _1 + 1;
+    */
+    std::string name = std::string("plus_one_") + boost::compute::type_name<T>();
+    return BOOST_COMPUTE_FUNCTION_WITH_NAME_AND_SOURCE_STRING(T, name.c_str(), (T x), BOOST_COMPUTE_STRINGIZE_SOURCE({
+        return x + 1;
+    }));
   }
 };
 
@@ -84,7 +94,6 @@ class GiantFinder_impl {
   device_vector_wrapper<hd_size> d_giant_data_inds;
   device_vector_wrapper<hd_size> d_giant_data_segments;
   device_vector_wrapper<hd_size> d_giant_data_seg_ids;
-  device_vector_wrapper<hd_size> discard;
 
 public:
   hd_error exec(const boost::compute::buffer_iterator<hd_float> d_data,
@@ -218,7 +227,8 @@ public:
     boost::compute::adjacent_difference(
         d_giant_data_inds.begin(),
         d_giant_data_inds.end(),
-        d_giant_data_segments.begin(), not_nearby<hd_size>(merge_dist)());
+        d_giant_data_segments.begin(),
+        not_nearby<hd_size>(merge_dist)());
     boost::compute::system::default_queue().finish();
 
     // hd_size giant_count_quick = thrust::count(d_giant_data_segments.begin(),
@@ -267,7 +277,6 @@ public:
     d_giant_inds.resize(d_giant_inds.size() + giant_count);
     d_giant_begins.resize(d_giant_begins.size() + giant_count);
     d_giant_ends.resize(d_giant_ends.size() + giant_count);
-    discard.resize(d_giant_data_inds.size());
     float_ptr new_giant_peaks_begin = d_giant_peaks.begin() + new_giants_offset;
     size_ptr new_giant_inds_begin = d_giant_inds.begin() + new_giants_offset;
     size_ptr new_giant_begins_begin = d_giant_begins.begin() + new_giants_offset;
