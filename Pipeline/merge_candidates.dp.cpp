@@ -102,6 +102,7 @@ hd_error merge_candidates(hd_size count,
 
     // Merge giants into groups according to the label
     // WARNING: BinaryFunction and BinaryPredicate is swapped for different API between thrust and Boost.Compute
+    /*
     boost::compute::detail::dispatch_reduce_by_key_no_count_check(
         labels_begin, labels_begin + count,
         boost::compute::make_permutation_iterator(
@@ -123,6 +124,46 @@ hd_error merge_candidates(hd_size count,
                                                             group_members_begin)),
         merge_candidates_functor()(), boost::compute::equal_to<hd_size>(),
         boost::compute::system::default_queue());
+    */
+    device_vector_wrapper<hd_size> d_key_out_1(count);
+    device_vector_wrapper<hd_size> d_key_out_2(count);
+    hd_size d_key_out_count_1 = 
+    boost::compute::reduce_by_key(
+        labels_begin, labels_begin + count,
+        boost::compute::make_permutation_iterator(cand_peaks_begin, d_permutation.begin()),
+        d_key_out_1.begin(), //discard_iterator_wrapper(), // keys output
+        group_peaks_begin,
+        boost::compute::max<hd_float>(),
+        boost::compute::equal_to<hd_size>()
+        ).first - d_key_out_1.begin();
+    hd_size d_key_out_count_2 = 
+    boost::compute::reduce_by_key(
+        labels_begin, labels_begin + count,
+        boost::compute::make_permutation_iterator(cand_members_begin, d_permutation.begin()),
+        d_key_out_2.begin(), //discard_iterator_wrapper(), // keys output
+        group_members_begin,
+        boost::compute::plus<hd_float>(),
+        boost::compute::equal_to<hd_size>()
+        ).first - d_key_out_2.begin();
+    boost::compute::system::default_queue().finish();
+    assert(d_key_out_count_1 == d_key_out_count_2);
+    // TODO: check
+    // TODO: gather/scatter?
+    boost::compute::copy(boost::compute::make_permutation_iterator(cand_inds_begin, d_key_out_1.begin()),
+                         boost::compute::make_permutation_iterator(cand_inds_begin, d_key_out_1.begin()) + d_key_out_count_1,
+                         group_inds_begin);
+    boost::compute::copy(boost::compute::make_permutation_iterator(cand_begins_begin, d_key_out_1.begin()),
+                         boost::compute::make_permutation_iterator(cand_begins_begin, d_key_out_1.begin()) + d_key_out_count_1,
+                         group_begins_begin);
+    boost::compute::copy(boost::compute::make_permutation_iterator(cand_ends_begin, d_key_out_1.begin()),
+                         boost::compute::make_permutation_iterator(cand_ends_begin, d_key_out_1.begin()) + d_key_out_count_1,
+                         group_ends_begin);
+    boost::compute::copy(boost::compute::make_permutation_iterator(cand_filter_inds_begin, d_key_out_1.begin()),
+                         boost::compute::make_permutation_iterator(cand_filter_inds_begin, d_key_out_1.begin()) + d_key_out_count_1,
+                         group_filter_inds_begin);
+    boost::compute::copy(boost::compute::make_permutation_iterator(cand_dm_inds_begin, d_key_out_1.begin()),
+                         boost::compute::make_permutation_iterator(cand_dm_inds_begin, d_key_out_1.begin()) + d_key_out_count_1,
+                         group_dm_inds_begin);
     boost::compute::system::default_queue().finish();
 
     return HD_NO_ERROR;
