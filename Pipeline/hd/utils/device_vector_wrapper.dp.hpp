@@ -11,21 +11,22 @@ public:
     using boost::compute::vector<T, Alloc>::vector;
     typedef Alloc allocator_type;
     typedef typename allocator_type::size_type size_type;
+    using super = boost::compute::vector<T, Alloc>;
 
     template <typename OtherAllocator>
     boost::compute::vector<T, Alloc> &operator=(const std::vector<T, OtherAllocator> &v) {
-        return boost::compute::vector<T, Alloc>::operator=(v);
+        return super::operator=(v);
     }
 
-    inline void resize(size_type size, boost::compute::command_queue queue = boost::compute::system::default_queue()) {
-        boost::compute::vector<T, Alloc>::resize(size, queue);
+    inline void resize(size_type size, boost::compute::command_queue& queue = boost::compute::system::default_queue()) {
+        super::resize(size, queue);
     }
 
-    void resize(size_type new_size, const T &x, boost::compute::command_queue queue = boost::compute::system::default_queue()) {
-        size_type old_size = boost::compute::vector<T, Alloc>::size();
-        boost::compute::vector<T, Alloc>::resize(new_size);
+    void resize(size_type new_size, const T &x, boost::compute::command_queue& queue = boost::compute::system::default_queue()) {
+        size_type old_size = super::size();
+        super::resize(new_size);
         if(old_size < new_size){
-            boost::compute::iota(boost::compute::vector<T, Alloc>::begin() + old_size, boost::compute::vector<T, Alloc>::end(), x);
+            boost::compute::fill(super::begin() + old_size, super::end(), x);
             queue.finish();
         }
     }
