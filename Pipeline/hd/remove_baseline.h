@@ -11,7 +11,7 @@
 #include "hd/error.h"
 
 #include <boost/shared_ptr.hpp>
-#include <boost/compute/iterator/buffer_iterator.hpp>
+#include "hd/utils/buffer_iterator.dp.hpp"
 
 struct RemoveBaselinePlan_impl;
 

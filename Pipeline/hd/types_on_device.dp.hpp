@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hd/types.h"
-#include <boost/compute/iterator/buffer_iterator.hpp>
+#include "hd/utils/buffer_iterator.dp.hpp"
 
 using boost::compute::buffer_iterator;
 // added for device computing

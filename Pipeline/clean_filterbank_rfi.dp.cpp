@@ -14,7 +14,7 @@
 #include "hd/rng.dp.hpp"
 #include "hd/utils/device_to_host_copy.dp.hpp"
 #include "hd/utils/func_with_source_string.dp.hpp"
-#include "hd/utils/meta_kernel.dp.hpp"
+#include "hd/utils/buffer_iterator.dp.hpp"
 #include "hd/utils/wrappers.dp.hpp"
 #include <vector>
 #include <dedisp.h>

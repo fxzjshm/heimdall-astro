@@ -10,6 +10,7 @@
 #include "hd/error.h"
 #include "hd/types.h"
 
+#include "hd/utils/buffer_iterator.dp.hpp"
 #include <boost/compute/iterator.hpp>
 
 using boost::compute::buffer_iterator;

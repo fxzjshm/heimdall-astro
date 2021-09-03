@@ -13,13 +13,14 @@
 #ifndef BOOST_COMPUTE_ALGORITHM_SCATTER_IF_HPP
 #define BOOST_COMPUTE_ALGORITHM_SCATTER_IF_HPP
 
+#include "hd/utils/buffer_iterator.dp.hpp"
+
 #include <boost/static_assert.hpp>
 #include <boost/algorithm/string/replace.hpp>
 
 #include <boost/compute/system.hpp>
 #include <boost/compute/exception.hpp>
 #include <boost/compute/command_queue.hpp>
-#include <boost/compute/iterator/buffer_iterator.hpp>
 #include <boost/compute/type_traits/type_name.hpp>
 #include <boost/compute/detail/iterator_range_size.hpp>
 #include <boost/compute/detail/meta_kernel.hpp>

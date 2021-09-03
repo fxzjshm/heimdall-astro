@@ -1,4 +1,4 @@
-#include <boost/compute/iterator/buffer_iterator.hpp>
+#include "hd/utils/buffer_iterator.dp.hpp"
 
 namespace boost::compute {
 

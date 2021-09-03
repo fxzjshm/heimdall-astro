@@ -10,9 +10,10 @@
 #include <string>
 using std::string;
 #include <fstream>
+#include <iostream>
 
+#include "hd/utils/buffer_iterator.dp.hpp"
 #include <boost/compute/algorithm/copy.hpp>
-#include <boost/compute/iterator/buffer_iterator.hpp>
 #include <boost/compute/system.hpp>
 
 namespace detail {

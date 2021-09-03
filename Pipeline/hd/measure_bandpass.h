@@ -10,7 +10,7 @@
 #include "hd/error.h"
 #include "hd/types.h"
 
-#include <boost/compute/iterator/buffer_iterator.hpp>
+#include "hd/utils/buffer_iterator.dp.hpp"
 
 hd_error measure_bandpass(const boost::compute::buffer_iterator<hd_byte> d_in,
                           hd_size        nsamps,
