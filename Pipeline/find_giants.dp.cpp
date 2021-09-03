@@ -22,8 +22,10 @@
 #include "hd/stopwatch.h"
 //#include "hd/write_time_series.h"
 #include <iostream>
-//#define PRINT_BENCHMARKS
 
+#ifdef PRINT_BENCHMARKS
+GiantFinder_profile giant_finder_profile;
+#endif // PRINT_BENCHMARKS
 
 template <typename T> struct greater_than_val {
   T val;
@@ -150,6 +152,7 @@ public:
     timer.stop();
     std::cout << "count_if time:           " << timer.getTime() << " s"
               << std::endl;
+    giant_finder_profile.count_if_time += timer.getTime();
     timer.reset();
 
     timer.start();
@@ -163,6 +166,7 @@ public:
     timer.stop();
     std::cout << "giant_data resize time:  " << timer.getTime() << " s"
               << std::endl;
+    giant_finder_profile.giant_data_resize_time += timer.getTime();
     timer.reset();
 
     // Copy all of the giant data and their locations into one place
@@ -170,29 +174,6 @@ public:
     timer.start();
 #endif
 
-//    hd_size giant_data_count2 =
-//        /* DPCT_ORIG
-//           copy_if(make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
-//                                                   make_counting_iterator(0u))),*/
-//        copy_if(make_zip_iterator(make_tuple(d_data_begin,
-//                                  make_counting_iterator((hd_size)0))),
-//            /* DPCT_ORIG
-//               make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
-//                                                       make_counting_iterator(0u)))+count,*/
-//                make_zip_iterator(make_tuple(d_data_begin,
-//                                  make_counting_iterator((hd_size)0))) + count,
-//                (d_data_begin), // the stencil
-//                            /* DPCT_ORIG
-//                               make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
-//                                                                       thrust::retag<my_tag>(d_giant_data_inds.begin()))),*/
-//                make_zip_iterator(make_tuple(d_giant_data.begin(),
-//                                             d_giant_data_inds.begin())),
-//                greater_than_val<hd_float>(thresh)())
-//        /* DPCT_ORIG       -
-//           make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
-//                                             thrust::retag<my_tag>(d_giant_data_inds.begin())));*/
-//        - make_zip_iterator(make_tuple(d_giant_data.begin(),
-//                                       d_giant_data_inds.begin()));
     // NOTICE: zip_iterator seems to be not writeable in Boost.Compute's implemention,
     //         so should split this into two function calls
     hd_size giant_data_count2 =
@@ -219,6 +200,7 @@ public:
     timer.stop();
     std::cout << "giant_data copy_if time: " << timer.getTime() << " s"
               << std::endl;
+    giant_finder_profile.giant_data_copy_if_time += timer.getTime();
     timer.reset();
 
     timer.start();
@@ -274,6 +256,7 @@ public:
     timer.stop();
     std::cout << "giant segments time:     " << timer.getTime() << " s"
               << std::endl;
+    giant_finder_profile.giant_segments_time += timer.getTime();
     timer.reset();
 
     timer.start();
@@ -295,6 +278,7 @@ public:
     timer.stop();
     std::cout << "giants resize time:      " << timer.getTime() << " s"
               << std::endl;
+    giant_finder_profile.giants_resize_time += timer.getTime();
     timer.reset();
 
     timer.start();
@@ -304,21 +288,6 @@ public:
     // NOTICE: zip_iterator seems to be not writeable in Boost.Compute's implemention,
     //         so should rewrite this call
     // NOTICE: BinaryFunction and BinaryPredicate is swapped for different API between thrust and Boost.Compute
-//        hd_size giant_count2 =
-//        // WARNING: BinaryFunction and BinaryPredicate is swapped for different API between thrust and Boost.Compute
-//        boost::compute::reduce_by_key(
-//            d_giant_data_inds.begin(), // the keys
-//            d_giant_data_inds.end(),
-//            boost::compute::make_zip_iterator(boost::make_tuple(d_giant_data.begin(),
-//                                           d_giant_data_inds.begin())),
-//            discard_iterator_wrapper(), // discard.begin(), //, // the keys output
-//            boost::compute::make_zip_iterator(boost::make_tuple(new_giant_peaks_begin,
-//                                           new_giant_inds_begin)),
-//            maximum_first<boost::tuple<hd_float, hd_size>>()(),
-//            nearby<hd_size>(merge_dist)())
-//            .second -
-//        boost::compute::make_zip_iterator(boost::make_tuple(new_giant_peaks_begin,
-//                                       new_giant_inds_begin));
     hd_size giant_count2 =
         boost::compute::reduce_by_key(
             d_giant_data_inds.begin(), // the keys
@@ -339,6 +308,7 @@ public:
     timer.stop();
     std::cout << "reduce_by_key time:      " << timer.getTime() << " s"
               << std::endl;
+    giant_finder_profile.reduce_by_key_time += timer.getTime();
     timer.reset();
 
     timer.start();
@@ -380,9 +350,8 @@ public:
     timer.stop();
     std::cout << "begin/end copy_if time:  " << timer.getTime() << " s"
               << std::endl;
+    giant_finder_profile.begin_end_copy_if_time += timer.getTime();
     timer.reset();
-
-    std::cout << "--------------------" << std::endl;
 #endif
 
     return HD_NO_ERROR;

@@ -405,6 +405,9 @@ hd_error hd_execute(hd_pipeline pl,
   GetRMSPlan                  rms_getter;
   MatchedFilterPlan<hd_float> matched_filter_plan;
   GiantFinder                 giant_finder;
+#ifdef PRINT_BENCHMARKS
+  giant_finder_profile = {0, 0, 0, 0, 0, 0, 0, 0};
+#endif // PRINT_BENCHMARKS
 
   device_vector_wrapper<hd_float> d_giant_peaks;
   device_vector_wrapper<hd_size> d_giant_inds;
@@ -583,13 +586,8 @@ hd_error hd_execute(hd_pipeline pl,
       }
       
       // Note: Filter width is relative to the current time resolution
-/* DPCT_ORIG       hd_size rel_min_tscrunch_width =
-   std::max(pl->params.min_tscrunch_width / cur_dm_scrunch, hd_size(1));*/
       hd_size rel_min_tscrunch_width =
           std::max(pl->params.min_tscrunch_width / cur_dm_scrunch, hd_size(1));
-/* DPCT_ORIG       hd_size rel_tscrunch_width = std::max(2 * rel_filter_width
-                                            / rel_min_tscrunch_width,
-                                            hd_size(1));*/
       hd_size rel_tscrunch_width =
           std::max(2 * rel_filter_width / rel_min_tscrunch_width, hd_size(1));
       // Filter width relative to cur_dm_scrunch AND tscrunch
@@ -673,6 +671,11 @@ hd_error hd_execute(hd_pipeline pl,
       if( error != HD_NO_ERROR ) {
         return throw_error(error);
       }
+#ifdef PRINT_BENCHMARKS
+      Stopwatch final_process_watch;
+      boost::compute::system::default_queue().finish();
+      final_process_watch.start();
+#endif // PRINT_BENCHMARKS
       
       hd_size rel_cur_filtered_offset = (cur_filtered_offset /
                                          rel_tscrunch_width);
@@ -695,6 +698,15 @@ hd_error hd_execute(hd_pipeline pl,
       d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
       // Note: This could be used to track total member samples if desired
       d_giant_members.resize(d_giant_peaks.size(), 1);
+
+#ifdef PRINT_BENCHMARKS
+      boost::compute::system::default_queue().finish();
+      final_process_watch.stop();
+      std::cout << "final_process time:     " << final_process_watch.getTime() << " s"
+                << std::endl;
+      giant_finder_profile.final_process_time += final_process_watch.getTime();
+      std::cout << "--------------------" << std::endl;
+#endif // PRINT_BENCHMARKS
       
       stop_timer(giants_timer);
       
@@ -927,6 +939,14 @@ hd_error hd_execute(hd_pipeline pl,
   cout << "Normalisation time:      " << normalise_timer.getTime() << endl;
   cout << "Filtering time:          " << filter_timer.getTime() << endl;
   cout << "Find giants time:        " << giants_timer.getTime() << endl;
+  cout << " count_if time:          " << giant_finder_profile.count_if_time << endl;
+  cout << " giant_data resize time: " << giant_finder_profile.giant_data_resize_time << endl;
+  cout << " giant_data copy_if time:" << giant_finder_profile.giant_data_copy_if_time << endl;
+  cout << " giant segments time:    " << giant_finder_profile.giant_segments_time << endl;
+  cout << " giants resize time:     " << giant_finder_profile.giants_resize_time << endl;
+  cout << " reduce_by_key time:     " << giant_finder_profile.reduce_by_key_time << endl;
+  cout << " begin/end copy_if time: " << giant_finder_profile.begin_end_copy_if_time << endl;
+  cout << " final_procss time:      " << giant_finder_profile.final_process_time << endl;
   cout << "Process candidates time: " << candidates_timer.getTime() << endl;
   cout << "Total time:              " << total_timer.getTime() << endl;
   }
@@ -942,7 +962,7 @@ hd_error hd_execute(hd_pipeline pl,
                        candidates_timer.getTime());
   hd_float misc_time = total_timer.getTime() - time_sum;
   
-  /*
+  
   std::ofstream timing_file("timing.dat", std::ios::app);
   timing_file << total_timer.getTime() << "\t"
               << misc_time << "\t"
@@ -956,7 +976,20 @@ hd_error hd_execute(hd_pipeline pl,
               << giants_timer.getTime() << "\t"
               << candidates_timer.getTime() << endl;
   timing_file.close();
-  */
+
+  std::ofstream find_giants_timing_file("find_giants_timing.dat", std::ios::app);
+  find_giants_timing_file
+    << giant_finder_profile.count_if_time << "\t"
+    << giant_finder_profile.giant_data_resize_time << "\t"
+    << giant_finder_profile.giant_data_copy_if_time << "\t"
+    << giant_finder_profile.giant_segments_time << "\t"
+    << giant_finder_profile.giants_resize_time << "\t"
+    << giant_finder_profile.reduce_by_key_time << "\t"
+    << giant_finder_profile.begin_end_copy_if_time << "\t"
+    << giant_finder_profile.final_process_time << "\t"
+    << endl;
+  find_giants_timing_file.close();
+  
   
 #endif // HD_BENCHMARK
   

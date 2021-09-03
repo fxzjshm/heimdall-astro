@@ -29,3 +29,18 @@ struct GiantFinder {
 private:
 	boost::shared_ptr<GiantFinder_impl> m_impl;
 };
+
+#ifdef PRINT_BENCHMARKS
+struct GiantFinder_profile {
+    float count_if_time;
+    float giant_data_resize_time;
+    float giant_data_copy_if_time;
+    float giant_segments_time;
+    float giants_resize_time;
+    float reduce_by_key_time;
+    float begin_end_copy_if_time;
+    float final_process_time;
+};
+
+extern GiantFinder_profile giant_finder_profile;
+#endif // PRINT_BENCHMARKS

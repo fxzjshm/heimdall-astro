@@ -162,7 +162,7 @@ struct median_scrunch5_kernel {
 		hd_float e = in[5*i+4];
 		return median5(a, b, c, d, e);
 	) + "}");
-    return function_with_external_function(median_scrunch5_kernel_closure, {median3_function, median4_function, median5_function});
+    return function_with_external_function(median_scrunch5_kernel_closure, median5_function);
     }
 };
 
