@@ -398,12 +398,12 @@ hd_error mean_scrunch2_array(const buffer_iterator<hd_float> d_in,
 // suggested by Ewan Barr (2016 email)
 struct linear_stretch_functor2 {
     const buffer_iterator<hd_float> in;
-    unsigned in_size;
-    float step;
-    float correction;
+    argument_wrapper<unsigned> in_size;
+    argument_wrapper<float> step;
+    argument_wrapper<float> correction;
 
     linear_stretch_functor2(const buffer_iterator<hd_float> in_, unsigned in_size, float step)
-      : in(in_), in_size(in_size), step(step), correction(((int)(step/2))/step){}
+      : in(in_), WRAP_ARG(in_size), WRAP_ARG(step), WRAP_ARG(correction, ((int)(step/2))/step){}
 
     inline auto operator()() const {
         BOOST_COMPUTE_CLOSURE(hd_float, linear_stretch_functor2_closure, (unsigned int out_idx), (in, in_size, step, correction), {
