@@ -1,129 +1,73 @@
-#pragma once
+//---------------------------------------------------------------------------//
+// Copyright (c) 2015 Jakub Szuppe <j.szuppe@gmail.com>
+//
+// Distributed under the Boost Software License, Version 1.0
+// See accompanying file LICENSE_1_0.txt or copy at
+// http://www.boost.org/LICENSE_1_0.txt
+//
+// See http://boostorg.github.com/compute for more information.
+//---------------------------------------------------------------------------//
 
-#include <boost/compute/container/vector.hpp>
+// modification: removed restriction on cpu in reduce_by_key_on_gpu_requirements_met()
+
+#ifndef BOOST_COMPUTE_ALGORITHM_DETAIL_REDUCE_BY_KEY_HPP
+#define BOOST_COMPUTE_ALGORITHM_DETAIL_REDUCE_BY_KEY_HPP
+
+#include <algorithm>
+#include <iterator>
+
 #include <boost/compute/command_queue.hpp>
-#include <boost/compute/memory/local_buffer.hpp>
+#include <boost/compute/functional.hpp>
+#include <boost/compute/container/vector.hpp>
+#include <boost/compute/detail/iterator_range_size.hpp>
+#include <boost/compute/algorithm/detail/serial_reduce_by_key.hpp>
+#include "hd/utils/reduce_by_key_with_scan.dp.hpp"
+#include <boost/compute/type_traits.hpp>
 
-namespace boost::compute::detail {
+namespace boost {
+namespace compute {
+namespace detail {
 
-/// \internal_
-///
-/// Perform final reduction by key. Each work item:
-/// 1. Perform local work-group reduction (Hillis/Steele scan)
-/// 2. Add carry-in (if keys are right)
-/// 3. Save reduced value if next key is different than processed one
 template<class InputKeyIterator, class InputValueIterator,
          class OutputKeyIterator, class OutputValueIterator,
-         class OutputValueIterator2, class BinaryFunction>
-inline void final_reduction(InputKeyIterator keys_first,
+         class BinaryFunction, class BinaryPredicate>
+size_t reduce_by_key_on_gpu(InputKeyIterator keys_first,
+                            InputKeyIterator keys_last,
                             InputValueIterator values_first,
                             OutputKeyIterator keys_result,
                             OutputValueIterator values_result,
-                            size_t count,
                             BinaryFunction function,
-                            vector<uint_>::iterator new_keys_first,
-                            vector<uint_>::iterator carry_in_keys_first,
-                            OutputValueIterator2 carry_in_values_first,
-                            size_t carry_in_size,
-                            size_t work_group_size,
+                            BinaryPredicate predicate,
                             command_queue &queue)
 {
-    typedef typename
-        std::iterator_traits<OutputValueIterator>::value_type value_out_type;
-
-    detail::meta_kernel k("reduce_by_key_with_scan_final_reduction");
-    k.add_set_arg<const uint_>("count", uint_(count));
-    size_t local_keys_arg = k.add_arg<uint_ *>(memory_object::local_memory, "lkeys");
-    size_t local_vals_arg = k.add_arg<value_out_type *>(memory_object::local_memory, "lvals");
-
-    k <<
-        k.decl<const uint_>("gid") << " = get_global_id(0);\n" <<
-        k.decl<const uint_>("wg_size") << " = get_local_size(0);\n" <<
-        k.decl<const uint_>("lid") << " = get_local_id(0);\n" <<
-        k.decl<const uint_>("group_id") << " = get_group_id(0);\n" <<
-
-        k.decl<uint_>("key") << ";\n" <<
-        k.decl<value_out_type>("value") << ";\n"
-
-        "if(gid < count){\n" <<
-            k.var<uint_>("key") << " = " <<
-                new_keys_first[k.var<const uint_>("gid")] << ";\n" <<
-            k.var<value_out_type>("value") << " = " <<
-                values_first[k.var<const uint_>("gid")] << ";\n" <<
-            "lkeys[lid] = key;\n" <<
-            "lvals[lid] = value;\n" <<
-        "}\n" <<
-
-        // Hillis/Steele scan
-        k.decl<value_out_type>("result") << " = value;\n" <<
-        k.decl<uint_>("other_key") << ";\n" <<
-        k.decl<value_out_type>("other_value") << ";\n" <<
-
-        "for(" << k.decl<uint_>("offset") << " = 1; " <<
-                 "offset < wg_size ; offset *= 2){\n"
-        "    barrier(CLK_LOCAL_MEM_FENCE);\n" <<
-        "    if(lid >= offset) {\n" <<
-        "        other_key = lkeys[lid - offset];\n" <<
-        "        if(other_key == key){\n" <<
-        "            other_value = lvals[lid - offset];\n" <<
-        "            result = " << function(k.var<value_out_type>("result"),
-                                            k.var<value_out_type>("other_value")) << ";\n" <<
-        "        }\n" <<
-        "    }\n" <<
-        "    barrier(CLK_LOCAL_MEM_FENCE);\n" <<
-        "    lvals[lid] = result;\n" <<
-        "}\n" <<
-
-        "if(gid >= count) {\n return;\n};\n" <<
-
-        k.decl<const bool>("save") << " = (gid < (count - 1)) ?"
-                                   << new_keys_first[k.var<const uint_>("gid + 1")] << " != key" <<
-                                   ": true;\n" <<
-
-        // Add carry in
-        k.decl<uint_>("carry_in_key") << ";\n" <<
-        "if(group_id > 0 && save) {\n" <<
-        "    carry_in_key = " << carry_in_keys_first[k.var<const uint_>("group_id - 1")] << ";\n" <<
-        "    if(key == carry_in_key){\n" <<
-        "        other_value = " << carry_in_values_first[k.var<const uint_>("group_id - 1")] << ";\n" <<
-        "        result = " << function(k.var<value_out_type>("result"),
-                                        k.var<value_out_type>("other_value")) << ";\n" <<
-        "    }\n" <<
-        "}\n" <<
-
-        // Save result only if the next key is different or it's the last element.
-        "if(save){\n" <<
-        keys_result[k.var<uint_>("key")] << " = " << keys_first[k.var<const uint_>("gid")] << ";\n" <<
-        values_result[k.var<uint_>("key")] << " = result;\n" <<
-        "}\n"
-        ;
-
-    size_t work_groups_no = static_cast<size_t>(
-        std::ceil(float(count) / work_group_size)
-    );
-
-    const context &context = queue.get_context();
-    kernel kernel = k.compile(context);
-    kernel.set_arg(local_keys_arg, local_buffer<uint_>(work_group_size));
-    kernel.set_arg(local_vals_arg, local_buffer<value_out_type>(work_group_size));
-
-    queue.enqueue_1d_range_kernel(kernel,
-                                  0,
-                                  work_groups_no * work_group_size,
-                                  work_group_size);
+    return detail::reduce_by_key_with_scan(keys_first, keys_last, values_first,
+                                           keys_result, values_result, function,
+                                           predicate, queue);
 }
 
-} // namespace boost::compute::detail
-
-#include <boost/compute/algorithm/reduce_by_key.hpp>
-
-namespace boost::compute::detail {
+template<class InputKeyIterator, class InputValueIterator,
+         class OutputKeyIterator, class OutputValueIterator>
+bool reduce_by_key_on_gpu_requirements_met(InputKeyIterator keys_first,
+                                           InputValueIterator values_first,
+                                           OutputKeyIterator keys_result,
+                                           OutputValueIterator values_result,
+                                           const size_t count,
+                                           command_queue &queue)
+{
+    const device &device = queue.get_device();
+    return (count > 256)
+//             && !(device.type() & device::cpu)
+               && reduce_by_key_with_scan_requirements_met(keys_first, values_first,
+                                                           keys_result,values_result,
+                                                           count, queue);
+    return true;
+}
 
 template<class InputKeyIterator, class InputValueIterator,
          class OutputKeyIterator, class OutputValueIterator,
          class BinaryFunction, class BinaryPredicate>
 inline std::pair<OutputKeyIterator, OutputValueIterator>
-dispatch_reduce_by_key_no_count_check(InputKeyIterator keys_first,
+dispatch_reduce_by_key(InputKeyIterator keys_first,
                        InputKeyIterator keys_last,
                        InputValueIterator values_first,
                        OutputKeyIterator keys_result,
@@ -138,6 +82,15 @@ dispatch_reduce_by_key_no_count_check(InputKeyIterator keys_first,
         std::iterator_traits<OutputValueIterator>::difference_type value_difference_type;
 
     const size_t count = detail::iterator_range_size(keys_first, keys_last);
+    if (count < 2) {
+        boost::compute::copy_n(keys_first, count, keys_result, queue);
+        boost::compute::copy_n(values_first, count, values_result, queue);
+        return
+            std::make_pair<OutputKeyIterator, OutputValueIterator>(
+                keys_result + static_cast<key_difference_type>(count),
+                values_result + static_cast<value_difference_type>(count)
+            );
+    }
 
     size_t result_size = 0;
     if(reduce_by_key_on_gpu_requirements_met(keys_first, values_first, keys_result,
@@ -161,4 +114,8 @@ dispatch_reduce_by_key_no_count_check(InputKeyIterator keys_first,
         );
 }
 
-} // namespace boost::compute::detail
+} // end detail namespace
+} // end compute namespace
+} // end boost namespace
+
+#endif // BOOST_COMPUTE_ALGORITHM_DETAIL_REDUCE_BY_KEY_HPP
