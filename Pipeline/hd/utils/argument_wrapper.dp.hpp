@@ -12,15 +12,15 @@ public:
     std::string name;
     T val;
 
-    argument_wrapper(std::string name_, T val_ = T())
+    argument_wrapper(std::string name_, const T& val_ = T())
         : name(name_), val(val_) {}
 
-    argument_wrapper<T>& operator=(T& other) {
+    argument_wrapper<T>& operator=(const T& other) {
         val = other;
     }
 
     /// as if this is a constructor
-    void operator()(T val_) {
+    void operator()(const T& val_) {
         val = val_;
     }
 };

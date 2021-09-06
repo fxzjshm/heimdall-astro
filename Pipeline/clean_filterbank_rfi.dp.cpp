@@ -43,12 +43,18 @@ inline unsigned int hash(unsigned int a) {
 
 template <typename T>
 struct abs_less_than {
-  T thresh;
-  abs_less_than(T thresh_) : thresh(thresh_) {}
+  argument_wrapper<T> thresh;
+  abs_less_than(T thresh_) : WRAP_ARG(thresh, thresh_) {}
   inline bool operator()() const {
-    using boost::compute::lambda::fabs;
-    using boost::compute::lambda::_1;
-    return fabs(_1) < thresh;
+    // using boost::compute::lambda::fabs;
+    // using boost::compute::lambda::_1;
+    // return fabs(_1) < thresh;
+
+    std::string type_name = boost::compute::type_name<T>();
+    std::string name = std::string("zap_fb_rfi_functor_") + type_name;
+    return BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(bool, name.c_str(), (T x), (thresh), BOOST_COMPUTE_STRINGIZE_SOURCE({
+        return fabs(x) < thresh;
+    }));
   }
 };
 
@@ -467,8 +473,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
 
       //write_device_time_series(d_filtered.begin(), d_filtered.size(), 1.f, "clean_filterbank_rfi_d_filtered_pre_normalize.tim");
       // Normalise the filtered time series (RMS ~ sqrt(time))
-      boost::compute::constant_iterator<hd_float> 
-        norm_val_iter(1.0 / sqrt((hd_float)filter_width));
+      boost::compute::constant_iterator<argument_wrapper<hd_float> > 
+        norm_val_iter(argument_wrapper<hd_float>("norm_val", 1.0 / sqrt((hd_float)filter_width)));
       boost::compute::transform(
           d_filtered.begin(), d_filtered.end(), norm_val_iter,
           d_filtered.begin(),

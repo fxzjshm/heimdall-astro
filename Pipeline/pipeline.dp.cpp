@@ -536,7 +536,7 @@ hd_error hd_execute(hd_pipeline pl,
     hd_float rms = rms_getter.exec(time_series, cur_nsamps);
     boost::compute::transform(
         pl->d_time_series.begin(), pl->d_time_series.end(),
-        boost::compute::make_constant_iterator(hd_float(1.0) / rms),
+        boost::compute::make_constant_iterator(argument_wrapper("coeff", hd_float(1.0) / rms)),
         pl->d_time_series.begin(),
         boost::compute::multiplies<hd_float>());
     boost::compute::system::default_queue().finish();
@@ -617,15 +617,15 @@ hd_error hd_execute(hd_pipeline pl,
         boost::compute::transform(
             boost::compute::buffer_iterator<hd_float>(filtered_series),
             boost::compute::buffer_iterator<hd_float>(filtered_series) + cur_nsamps_filtered,
-            boost::compute::make_constant_iterator(hd_float(1.0) / rms),
+            boost::compute::make_constant_iterator(argument_wrapper("coeff", hd_float(1.0) / rms)),
             boost::compute::buffer_iterator<hd_float>(filtered_series),
             boost::compute::multiplies<hd_float>());
       }
       else
       {
         // rescale the filtered time series (RMS ~ sqrt(time))
-        boost::compute::constant_iterator<hd_float>
-          norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
+        boost::compute::constant_iterator<argument_wrapper<hd_float> >
+          norm_val_iter(argument_wrapper("coeff", 1.0f / sqrt((hd_float)rel_filter_width)));
         boost::compute::transform(
             boost::compute::buffer_iterator<hd_float>(filtered_series),
             boost::compute::buffer_iterator<hd_float>(filtered_series) + cur_nsamps_filtered,
@@ -679,19 +679,25 @@ hd_error hd_execute(hd_pipeline pl,
       
       hd_size rel_cur_filtered_offset = (cur_filtered_offset /
                                          rel_tscrunch_width);
+      argument_wrapper<hd_size> rel_cur_filtered_offset_wrapper("rel_cur_filtered_offset", rel_cur_filtered_offset);
+      argument_wrapper<hd_size> cur_scrunch_wrapper("cur_scrunch", cur_scrunch);
+      BOOST_COMPUTE_CLOSURE(hd_size, transform_functor, (hd_size x), (rel_cur_filtered_offset_wrapper, cur_scrunch_wrapper), {
+          return /*first_idx +*/ (x + rel_cur_filtered_offset_wrapper) * cur_scrunch_wrapper;
+      });
+
       using boost::compute::lambda::_1;
       boost::compute::transform(
           d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
           d_giant_inds.begin() + prev_giant_count,
-          /*first_idx +*/ (_1 + rel_cur_filtered_offset) * cur_scrunch);
+          transform_functor);
       boost::compute::transform(
           d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
           d_giant_begins.begin() + prev_giant_count,
-          /*first_idx +*/ (_1 + rel_cur_filtered_offset) * cur_scrunch);
+          transform_functor);
       boost::compute::transform(
           d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
           d_giant_ends.begin() + prev_giant_count,
-          /*first_idx +*/ (_1 + rel_cur_filtered_offset) * cur_scrunch);
+          transform_functor);
       boost::compute::system::default_queue().finish();
 
       d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx);
@@ -702,7 +708,7 @@ hd_error hd_execute(hd_pipeline pl,
 #ifdef PRINT_BENCHMARKS
       boost::compute::system::default_queue().finish();
       final_process_watch.stop();
-      std::cout << "final_process time:     " << final_process_watch.getTime() << " s"
+      std::cout << "final_process time:      " << final_process_watch.getTime() << " s"
                 << std::endl;
       giant_finder_profile.final_process_time += final_process_watch.getTime();
       std::cout << "--------------------" << std::endl;
@@ -939,6 +945,7 @@ hd_error hd_execute(hd_pipeline pl,
   cout << "Normalisation time:      " << normalise_timer.getTime() << endl;
   cout << "Filtering time:          " << filter_timer.getTime() << endl;
   cout << "Find giants time:        " << giants_timer.getTime() << endl;
+#ifdef PRINT_BENCHMARKS
   cout << " count_if time:          " << giant_finder_profile.count_if_time << endl;
   cout << " giant_data resize time: " << giant_finder_profile.giant_data_resize_time << endl;
   cout << " giant_data copy_if time:" << giant_finder_profile.giant_data_copy_if_time << endl;
@@ -947,6 +954,7 @@ hd_error hd_execute(hd_pipeline pl,
   cout << " reduce_by_key time:     " << giant_finder_profile.reduce_by_key_time << endl;
   cout << " begin/end copy_if time: " << giant_finder_profile.begin_end_copy_if_time << endl;
   cout << " final_procss time:      " << giant_finder_profile.final_process_time << endl;
+#endif // PRINT_BENCHMARKS
   cout << "Process candidates time: " << candidates_timer.getTime() << endl;
   cout << "Total time:              " << total_timer.getTime() << endl;
   }
@@ -977,6 +985,7 @@ hd_error hd_execute(hd_pipeline pl,
               << candidates_timer.getTime() << endl;
   timing_file.close();
 
+#ifdef PRINT_BENCHMARKS
   std::ofstream find_giants_timing_file("find_giants_timing.dat", std::ios::app);
   find_giants_timing_file
     << giant_finder_profile.count_if_time << "\t"
@@ -989,7 +998,7 @@ hd_error hd_execute(hd_pipeline pl,
     << giant_finder_profile.final_process_time << "\t"
     << endl;
   find_giants_timing_file.close();
-  
+#endif // PRINT_BENCHMARKS
   
 #endif // HD_BENCHMARK
   

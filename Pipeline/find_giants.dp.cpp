@@ -29,11 +29,18 @@ GiantFinder_profile giant_finder_profile;
 #endif // PRINT_BENCHMARKS
 
 template <typename T> struct greater_than_val {
-  T val;
-  greater_than_val(T val_) : val(val_) {}
+  argument_wrapper<T> val;
+  greater_than_val(T val_) : WRAP_ARG(val, val_) {}
   inline auto operator()() const {
-    using boost::compute::lambda::_1;
-    return _1 > val;
+    // using boost::compute::lambda::_1;
+    // return _1 > val;
+    std::string type_name = boost::compute::type_name<T>();
+    std::string name = std::string("greater_than_val_") + type_name;
+    auto func = BOOST_COMPUTE_CLOSURE_WITH_NAME_AND_SOURCE_STRING(bool, name.c_str(), (T x), (val), BOOST_COMPUTE_STRINGIZE_SOURCE({
+        return x > val;
+    }));
+    func.define("T", type_name);
+    return func;
   }
 };
 
@@ -50,8 +57,8 @@ template <typename T> struct maximum_first {
 };
 
 template <typename T> struct nearby {
-  T max_dist;
-  nearby(T max_dist_) : max_dist(max_dist_) {}
+  argument_wrapper<T> max_dist;
+  nearby(T max_dist_) : WRAP_ARG(max_dist, max_dist_) {}
   inline auto operator()() const {
     std::string type_name = boost::compute::type_name<T>();
     std::string name = std::string("nearby_") + type_name;
@@ -63,8 +70,8 @@ template <typename T> struct nearby {
   }
 };
 template <typename T> struct not_nearby {
-  T max_dist;
-  not_nearby(T max_dist_) : max_dist(max_dist_) {}
+  argument_wrapper<T> max_dist;
+  not_nearby(T max_dist_) : WRAP_ARG(max_dist, max_dist_) {}
   inline auto operator()() const {
     std::string type_name = boost::compute::type_name<T>();
     std::string name = std::string("not_nearby_") + type_name;

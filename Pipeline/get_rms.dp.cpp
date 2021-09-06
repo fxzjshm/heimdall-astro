@@ -88,7 +88,7 @@ hd_error normalise(boost::compute::buffer_iterator<hd_float> d_data, hd_size cou
 
         hd_float rms = get_rms(d_data, count);
         boost::compute::transform(d_data_begin, d_data_end,
-                           boost::compute::make_constant_iterator(hd_float(1.0) / rms),
+                           boost::compute::make_constant_iterator(argument_wrapper("coeff", hd_float(1.0) / rms)),
                            d_data_begin,
                            boost::compute::multiplies<hd_float>());
         boost::compute::system::default_queue().finish();
