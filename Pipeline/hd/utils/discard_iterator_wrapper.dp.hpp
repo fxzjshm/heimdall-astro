@@ -1,6 +1,6 @@
 #pragma once
 
-#include <boost/compute/detail/meta_kernel.hpp>
+#include "hd/utils/meta_kernel.dp.hpp"
 #include <boost/compute/iterator/discard_iterator.hpp>
 
 class discard_iterator_wrapper;

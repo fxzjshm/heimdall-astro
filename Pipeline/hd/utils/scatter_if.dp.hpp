@@ -23,7 +23,7 @@
 #include <boost/compute/command_queue.hpp>
 #include <boost/compute/type_traits/type_name.hpp>
 #include <boost/compute/detail/iterator_range_size.hpp>
-#include <boost/compute/detail/meta_kernel.hpp>
+#include "hd/utils/meta_kernel.dp.hpp"
 #include <boost/compute/type_traits/is_device_iterator.hpp>
 
 namespace boost {

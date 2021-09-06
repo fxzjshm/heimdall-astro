@@ -21,7 +21,7 @@
 #include <boost/compute/algorithm/inclusive_scan.hpp>
 #include <boost/compute/container/vector.hpp>
 #include <boost/compute/container/detail/scalar.hpp>
-#include <boost/compute/detail/meta_kernel.hpp>
+#include "hd/utils/meta_kernel.dp.hpp"
 #include <boost/compute/detail/iterator_range_size.hpp>
 #include <boost/compute/detail/read_write_single_value.hpp>
 #include <boost/compute/type_traits.hpp>

@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include <boost/compute/detail/meta_kernel.hpp>
+#include "hd/utils/meta_kernel.dp.hpp"
 
 class external_function {
 public:

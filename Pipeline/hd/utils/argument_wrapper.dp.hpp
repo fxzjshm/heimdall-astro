@@ -2,7 +2,7 @@
 
 #include <string>
 #include <boost/preprocessor/facilities/overload.hpp>
-#include <boost/compute/detail/meta_kernel.hpp>
+#include "hd/utils/meta_kernel.dp.hpp"
 
 /// this class stores some functor parameters and use them as kernel arguments instead of literals,
 /// so more kernel cache would be hit

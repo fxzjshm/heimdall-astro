@@ -7,6 +7,7 @@
 
 #include "hd/find_giants.h"
 
+#include "hd/utils/buffer_iterator.dp.hpp"
 #include "hd/utils/reduce_by_key.dp.hpp"
 #include <hd/utils/scatter_if.dp.hpp>
 #include <boost/compute/algorithm.hpp>
