@@ -1,5 +1,7 @@
 #pragma once
 
+#include "hd/utils/meta_kernel.dp.hpp"
+#include "hd/utils/buffer_iterator.dp.hpp"
 #include <boost/compute/container/vector.hpp>
 
 template <typename T, typename A1, typename A2>

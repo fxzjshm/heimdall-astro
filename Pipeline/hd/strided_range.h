@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "hd/utils/buffer_iterator.dp.hpp"
 #include <boost/compute/iterator.hpp>
 
 // this example illustrates how to make strided access to a range of values

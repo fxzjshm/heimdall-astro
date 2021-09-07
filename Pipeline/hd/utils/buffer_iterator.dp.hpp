@@ -22,10 +22,11 @@
 #include <boost/utility/enable_if.hpp>
 #include <boost/iterator/iterator_facade.hpp>
 
+#include "hd/utils/meta_kernel.dp.hpp"
+
 #include <boost/compute/buffer.hpp>
 #include <boost/compute/detail/buffer_value.hpp>
 #include <boost/compute/detail/is_buffer_iterator.hpp>
-#include "hd/utils/meta_kernel.dp.hpp"
 #include <boost/compute/detail/read_write_single_value.hpp>
 #include <boost/compute/type_traits/is_device_iterator.hpp>
 

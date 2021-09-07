@@ -22,7 +22,9 @@
 #include <mpi.h>
 #endif
 #include <cmath>
-#include <boost/compute/algorithm.hpp>
+#include <boost/compute/algorithm/copy.hpp>
+#include <boost/compute/algorithm/transform.hpp>
+#include <boost/compute/algorithm/for_each.hpp>
 #include <boost/compute/lambda.hpp>
 
 // TESTING ONLY
