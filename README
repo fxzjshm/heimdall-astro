@@ -6,18 +6,17 @@ Main modifications in Pipeline:
 * add `function_with_external_function` in order to package a functor with its dependencies together so that calling functions like `boost::compute::transform` will be easier. 
   * see `Pipeline/hd/utils/external_function.dp.cpp`
   * Note: don't know whether Boost.Compute has something similar already
-* all functor's `operator()` has been modified to return a `boost::compute::function`/`closure`/some wrapper, so `transform(begin, end, functor(parameter))` -> `transform(begin, end, functor(parameter)())`
+* all functor's `operator()` has been modified to return a `boost::compute::function`/`closure`/some wrapper, so all function calls like `transform(iterator_begin, iterator_end, functor(some_parameter))` should be written as `transform(iterator_begin, iterator_end, functor(some_parameter)())`
   * original proposal is converting a functor into a function which returns a `boost::compute::function`/... , but this leads to dangling references inside closure captures
-  * another proposal is using implicit type converting like `operator decltype(auto)` but this lead to `error: no class template named ‘result’ in ‘struct functor’`
-* add argument_wrapper to store functor arguments in kernel arguments instead of literals to avoid re-compiling every time
-  * thought this doesn't make big differences...
+  * another proposal is using implicit type converting like `operator decltype(auto)` but this lead to compile error like `error: no class template named ‘result’ in ‘struct functor’`
+* add argument_wrapper to store functor arguments in kernel arguments instead of literals to avoid re-compiling OpenCL kernel when it runs
   * see `Pipeline/hd/utils/argument_wrapper.dp.cpp`
 
 Main modifications in Boost.Compute
 * support capturing a `boost::compute::buffer_iterator` as a parameter of `boost::compute::closure`
-  * see `Pipeline/hd/utils/buffer_iterator.dp.hpp`
+  * see `template <class T> struct capture_traits<buffer_iterator<T> >` in `Pipeline/hd/utils/buffer_iterator.dp.hpp`
 * add `device_vector_wrapper` to support `resize(size_type n, T x)`
-  * see `Pipeline/hd/utils/wrappers.dp.hpp`
+  * see `Pipeline/hd/utils/device_vector_wrapper.dp.hpp`
 * add `copy_if` and `transform_if` with parameter stencil
   * see `Pipeline/hd/utils/copy_if.dp.hpp` and `Pipeline/hd/utils/transform_if.dp.hpp`
 * modified `scatter_if` to remove duplicated buffer offset (this offset has been already included in buffer_iterator)
@@ -26,6 +25,13 @@ Main modifications in Boost.Compute
   * see `Pipeline/hd/utils/reduce_by_key.dp.cpp`
 * do not check local mem type in reduce_by_key_with_scan_requirements_met() to utilize multi-core CPUs
   * see `Pipeline/hd/utils/reduce_by_key_with_scan.dp.cpp`
+* set buffer offset as kernel argument instead of kernel literal to avoid re-compiling
+  * this speeds up dramatically
+  * see `operator<<`s of `meta_kernel` in `Pipeline/hd/utils/buffer_iterator.dp.hpp`
+  * see `meta_kernel::get_and_increase_offset_counter()` in `Pipeline/hd/utils/meta_kernel.dp.hpp`
+* modified `scan_on_gpu` to correctly set output iterator offset
+  * required in `Pipeline/matched_filter.dp.cpp`
+  * see `Pipeline/hd/utils/scan_on_gpu.dp.hpp`
 
 Original wiki is at https://sourceforge.net/p/heimdall-astro/wiki/Home/
 Below is the original README
