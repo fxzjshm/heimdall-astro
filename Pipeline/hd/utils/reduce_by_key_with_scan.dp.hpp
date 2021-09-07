@@ -18,6 +18,7 @@
 
 #include <boost/compute/command_queue.hpp>
 #include <boost/compute/functional.hpp>
+#include "hd/utils/scan_on_gpu.dp.hpp"
 #include <boost/compute/algorithm/inclusive_scan.hpp>
 #include <boost/compute/container/vector.hpp>
 #include <boost/compute/container/detail/scalar.hpp>

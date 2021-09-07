@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hd/utils/scan_on_gpu.dp.hpp"
 #include <boost/compute/algorithm/copy_if.hpp>
 #include "hd/utils/transform_if.dp.hpp"
 
