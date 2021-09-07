@@ -21,7 +21,7 @@ class RemoveBaselinePlan_impl {
 
 public:
 	hd_error exec(boost::compute::buffer_iterator<hd_float> d_data, hd_size count,
-	              hd_size smooth_radius) {
+	              hd_size smooth_radius, boost::compute::command_queue& queue) {
         boost::compute::buffer_iterator<hd_float> d_data_begin(d_data);
 
         // This algorithm works by scrunching the data down to a time resolution
@@ -44,18 +44,18 @@ public:
 		hd_size nscrunches  = (hd_size)(std::log(count/sample_count)/std::log(5.));
         hd_size count_round = std::pow<double>(5., nscrunches) * sample_count;
 
-        buf1.resize(count_round);
-		buf2.resize(count_round/5);
+        buf1.resize(count_round, queue);
+		buf2.resize(count_round/5, queue);
         boost::compute::buffer_iterator<hd_float> buf1_ptr = buf1.begin();
         boost::compute::buffer_iterator<hd_float> buf2_ptr = buf2.begin();
 
         // First we re-sample to the rounded size
         //write_device_time_series(d_data, count, 1.f, "pre_baseline_linear_stretch.tim");
-		linear_stretch(d_data, count, buf1_ptr, count_round);
+		linear_stretch(d_data, count, buf1_ptr, count_round, queue);
 	
 		// Then we median scrunch until we reach the sample size
 		for( hd_size size=count_round; size>sample_count; size/=5 ) {
-			median_scrunch5(buf1_ptr, size, buf2_ptr);
+			median_scrunch5(buf1_ptr, size, buf2_ptr, queue);
             //write_device_time_series(buf1_ptr, size, 1.f, "median_scrunch5_size" + std::to_string(size) + "_in.tim");
             //write_device_time_series(buf2_ptr, size/5, 1.f, "median_scrunch5_size" + std::to_string(size) + "_out.tim");
 			std::swap(buf1_ptr, buf2_ptr);
@@ -65,21 +65,20 @@ public:
         boost::compute::buffer_iterator<hd_float> buf2_begin(buf2_ptr);
 
         // Then we need to extrapolate the ends
-		linear_stretch(buf1_ptr, sample_count, buf2_ptr+1, sample_count*2);
+		linear_stretch(buf1_ptr, sample_count, buf2_ptr+1, sample_count*2, queue);
         //write_device_time_series(buf1_ptr, sample_count, 1.f, "linear_stretch_1_buf1_ptr.tim");
         //write_device_time_series(buf2_ptr+1, sample_count*2, 1.f, "linear_stretch_1_buf2_ptr_2n.tim");
         
-		(buf2_begin + 0).write(2*buf2_begin[1] - buf2_begin[2], boost::compute::system::default_queue());
+		(buf2_begin + 0).write(2*buf2_begin[1] - buf2_begin[2], queue);
 		(buf2_begin + sample_count*2+1).write((2*buf2_begin[sample_count*2] -
-		                                        buf2_begin[sample_count*2-1]), 
-                                              boost::compute::system::default_queue());
+		                                        buf2_begin[sample_count*2-1]), queue);
         //write_device_time_series(buf2_ptr, sample_count*2+2, 1.f, "linear_stretch_1_buf2_ptr_2n+2.tim");
 	
-		baseline.resize(count);
+		baseline.resize(count, queue);
         boost::compute::buffer_iterator<hd_float> baseline_ptr = baseline.begin();
 
         // And finally we stretch back to the original length
-		linear_stretch(buf2_ptr, sample_count*2+2, baseline_ptr, count);
+		linear_stretch(buf2_ptr, sample_count*2+2, baseline_ptr, count, queue);
 	
 		// TESTING
 		//write_device_time_series(d_data, count, 1.f, "pre_baseline.tim");
@@ -89,8 +88,9 @@ public:
         boost::compute::transform(
                     d_data_begin, d_data_begin + count, baseline.begin(),
                     d_data_begin,
-                    boost::compute::minus<hd_float>());
-        boost::compute::system::default_queue().finish();
+                    boost::compute::minus<hd_float>(),
+                    queue);
+        queue.finish();
 
         //write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
 	
@@ -102,6 +102,6 @@ public:
 RemoveBaselinePlan::RemoveBaselinePlan()
 	: m_impl(new RemoveBaselinePlan_impl) {}
 hd_error RemoveBaselinePlan::exec(boost::compute::buffer_iterator<hd_float> d_data, hd_size count,
-                                  hd_size smooth_radius) {
-	return m_impl->exec(d_data, count, smooth_radius);
+                                  hd_size smooth_radius, boost::compute::command_queue& queue) {
+	return m_impl->exec(d_data, count, smooth_radius, queue);
 }

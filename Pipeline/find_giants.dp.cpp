@@ -111,7 +111,8 @@ public:
                 device_vector_wrapper<hd_float> &d_giant_peaks,
                 device_vector_wrapper<hd_size> &d_giant_inds,
                 device_vector_wrapper<hd_size> &d_giant_begins,
-                device_vector_wrapper<hd_size> &d_giant_ends) {
+                device_vector_wrapper<hd_size> &d_giant_ends,
+                boost::compute::command_queue& queue) {
     // This algorithm works by extracting all samples in the time series
     //   above thresh (the giant_data), segmenting those samples into
     //   isolated giants (based on merge_dist), and then computing the
@@ -145,7 +146,7 @@ public:
     /* DPCT_ORIG     hd_size giant_data_count =
      * thrust::count_if(thrust::retag<my_tag>(d_data_begin),*/
     hd_size giant_data_count = boost::compute::count_if(
-        d_data_begin, d_data_end, greater_than_val<hd_float>(thresh)());
+        d_data_begin, d_data_end, greater_than_val<hd_float>(thresh)(), queue);
     // std::cout << "GIANT_DATA_COUNT = " << giant_data_count << std::endl;
     // We can bail early if there are no giants at all
     
@@ -156,7 +157,7 @@ public:
     }
 
 #ifdef PRINT_BENCHMARKS
-    boost::compute::system::default_queue().finish();
+    queue.finish();
     timer.stop();
     std::cout << "count_if time:           " << timer.getTime() << " s"
               << std::endl;
@@ -166,11 +167,11 @@ public:
     timer.start();
 #endif
 
-    d_giant_data.resize(giant_data_count);
-    d_giant_data_inds.resize(giant_data_count);
+    d_giant_data.resize(giant_data_count, queue);
+    d_giant_data_inds.resize(giant_data_count, queue);
 
 #ifdef PRINT_BENCHMARKS
-    boost::compute::system::default_queue().finish();
+    queue.finish();
     timer.stop();
     std::cout << "giant_data resize time:  " << timer.getTime() << " s"
               << std::endl;
@@ -189,14 +190,16 @@ public:
                 d_data_begin + count,
                 (d_data_begin), // the stencil
                 d_giant_data.begin(),
-                greater_than_val<hd_float>(thresh)())
+                greater_than_val<hd_float>(thresh)(),
+                queue)
         - d_giant_data.begin();
     hd_size giant_data_count2_ =
         copy_if(make_counting_iterator((hd_size)0),
                 make_counting_iterator((hd_size)0) + count,
                 (d_data_begin), // the stencil
                 d_giant_data_inds.begin(),
-                greater_than_val<hd_float>(thresh)())
+                greater_than_val<hd_float>(thresh)(),
+                queue)
         - d_giant_data_inds.begin();
     assert(giant_data_count2 == giant_data_count2_);
     //write_vector(d_giant_data, "find_giants.d_giant_data");
@@ -204,7 +207,7 @@ public:
     
 
 #ifdef PRINT_BENCHMARKS
-    boost::compute::system::default_queue().finish();
+    queue.finish();
     timer.stop();
     std::cout << "giant_data copy_if time: " << timer.getTime() << " s"
               << std::endl;
@@ -216,14 +219,15 @@ public:
 
     // Create an array of head flags indicating candidate segments
     // thrust::device_vector<int> d_giant_data_segments(giant_data_count);
-    d_giant_data_segments.resize(giant_data_count);
+    d_giant_data_segments.resize(giant_data_count, queue);
 
     boost::compute::adjacent_difference(
         d_giant_data_inds.begin(),
         d_giant_data_inds.end(),
         d_giant_data_segments.begin(),
-        not_nearby<hd_size>(merge_dist)());
-    boost::compute::system::default_queue().finish();
+        not_nearby<hd_size>(merge_dist)(),
+        queue);
+    queue.finish();
     //write_vector(d_giant_data_segments, "find_giants.d_giant_data_segments");
     
 
@@ -240,13 +244,14 @@ public:
 
     // thrust::device_vector<hd_size>
     // d_giant_data_seg_ids(d_giant_data_segments.size());
-    d_giant_data_seg_ids.resize(d_giant_data_segments.size());
+    d_giant_data_seg_ids.resize(d_giant_data_segments.size(), queue);
 
     boost::compute::inclusive_scan(
         d_giant_data_segments.begin(),
         d_giant_data_segments.end(),
-        d_giant_data_seg_ids.begin());
-    boost::compute::system::default_queue().finish();
+        d_giant_data_seg_ids.begin(),
+        queue);
+    queue.finish();
     //write_vector(d_giant_data_seg_ids, "find_giants.d_giant_data_seg_ids");
 
     // We extract the number of giants from the end of the exclusive scan
@@ -260,7 +265,7 @@ public:
     // total_giant_count = giant_count;
 
 #ifdef PRINT_BENCHMARKS
-    boost::compute::system::default_queue().finish();
+    queue.finish();
     timer.stop();
     std::cout << "giant segments time:     " << timer.getTime() << " s"
               << std::endl;
@@ -272,17 +277,17 @@ public:
 
     hd_size new_giants_offset = d_giant_peaks.size();
     // Allocate space for the new giants
-    d_giant_peaks.resize(d_giant_peaks.size() + giant_count);
-    d_giant_inds.resize(d_giant_inds.size() + giant_count);
-    d_giant_begins.resize(d_giant_begins.size() + giant_count);
-    d_giant_ends.resize(d_giant_ends.size() + giant_count);
+    d_giant_peaks.resize(d_giant_peaks.size() + giant_count, queue);
+    d_giant_inds.resize(d_giant_inds.size() + giant_count, queue);
+    d_giant_begins.resize(d_giant_begins.size() + giant_count, queue);
+    d_giant_ends.resize(d_giant_ends.size() + giant_count, queue);
     float_ptr new_giant_peaks_begin = d_giant_peaks.begin() + new_giants_offset;
     size_ptr new_giant_inds_begin = d_giant_inds.begin() + new_giants_offset;
     size_ptr new_giant_begins_begin = d_giant_begins.begin() + new_giants_offset;
     size_ptr new_giant_ends_begin = d_giant_ends.begin() + new_giants_offset;
 
 #ifdef PRINT_BENCHMARKS
-    boost::compute::system::default_queue().finish();
+    queue.finish();
     timer.stop();
     std::cout << "giants resize time:      " << timer.getTime() << " s"
               << std::endl;
@@ -304,7 +309,8 @@ public:
             new_giant_inds_begin, // the keys output
             new_giant_peaks_begin,
             boost::compute::max<hd_float>(), // maximum_first<boost::tuple<hd_float, hd_size>>()(),
-            nearby<hd_size>(merge_dist)())
+            nearby<hd_size>(merge_dist)(),
+            queue)
             .second -
         new_giant_peaks_begin;
 
@@ -312,7 +318,7 @@ public:
     //write_vector(d_giant_inds, "find_giants.d_giant_inds");
 
 #ifdef PRINT_BENCHMARKS
-    boost::compute::system::default_queue().finish();
+    queue.finish();
     timer.stop();
     std::cout << "reduce_by_key time:      " << timer.getTime() << " s"
               << std::endl;
@@ -334,16 +340,17 @@ public:
     //write_vector(d_giant_ends, "find_giants.d_giant_ends.0");
     boost::compute::scatter_if(d_giant_data_inds.begin(), d_giant_data_inds.end(),
                d_giant_data_seg_ids.begin(), d_giant_data_segments.begin(),
-               new_giant_begins_begin);
-    boost::compute::system::default_queue().finish();
+               new_giant_begins_begin, queue);
+    queue.finish();
     boost::compute::scatter_if(
         boost::compute::make_transform_iterator(d_giant_data_inds.begin(),
                                              plus_one<hd_size>()()),
         boost::compute::make_transform_iterator(d_giant_data_inds.end() - 1,
                                              plus_one<hd_size>()()),
         d_giant_data_seg_ids.begin(), d_giant_data_segments.begin() + 1,
-        new_giant_ends_begin);
-    boost::compute::system::default_queue().finish();
+        new_giant_ends_begin,
+        queue);
+    queue.finish();
     //write_vector(d_giant_begins, "find_giants.d_giant_begins");
     //write_vector(d_giant_ends, "find_giants.d_giant_ends");
 
@@ -354,7 +361,7 @@ public:
     //write_vector(d_giant_ends, "find_giants.d_giant_ends_2");
 
 #ifdef PRINT_BENCHMARKS
-    boost::compute::system::default_queue().finish();
+    queue.finish();
     timer.stop();
     std::cout << "begin/end copy_if time:  " << timer.getTime() << " s"
               << std::endl;
@@ -374,7 +381,8 @@ hd_error GiantFinder::exec(const boost::compute::buffer_iterator<hd_float> d_dat
                            device_vector_wrapper<hd_float> &d_giant_peaks,
                            device_vector_wrapper<hd_size> &d_giant_inds,
                            device_vector_wrapper<hd_size> &d_giant_begins,
-                           device_vector_wrapper<hd_size> &d_giant_ends) {
+                           device_vector_wrapper<hd_size> &d_giant_ends,
+                           boost::compute::command_queue& queue) {
   return m_impl->exec(d_data, count, thresh, merge_dist, d_giant_peaks,
-                      d_giant_inds, d_giant_begins, d_giant_ends);
+                      d_giant_inds, d_giant_begins, d_giant_ends, queue);
 }

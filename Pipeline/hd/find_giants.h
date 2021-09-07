@@ -27,7 +27,8 @@ struct GiantFinder {
                       device_vector_wrapper<hd_float> &d_giant_peaks,
                       device_vector_wrapper<hd_size> &d_giant_inds,
                       device_vector_wrapper<hd_size> &d_giant_begins,
-                      device_vector_wrapper<hd_size> &d_giant_ends);
+                      device_vector_wrapper<hd_size> &d_giant_ends,
+                      boost::compute::command_queue& queue);
 
 private:
 	boost::shared_ptr<GiantFinder_impl> m_impl;

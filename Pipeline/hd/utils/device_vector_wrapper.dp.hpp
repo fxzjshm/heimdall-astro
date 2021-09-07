@@ -26,7 +26,7 @@ public:
         size_type old_size = super::size();
         super::resize(new_size);
         if(old_size < new_size){
-            boost::compute::fill(super::begin() + old_size, super::end(), x);
+            boost::compute::fill(super::begin() + old_size, super::end(), x, queue);
             queue.finish();
         }
     }

@@ -21,16 +21,16 @@ template <typename T> class MatchedFilterPlan_impl {
   hd_size m_max_width;
 
 public:
-  hd_error prep(const buffer_iterator<T> d_in, hd_size count, hd_size max_width) {
+  hd_error prep(const buffer_iterator<T> d_in, hd_size count, hd_size max_width, boost::compute::command_queue& queue) {
     m_max_width = max_width;
     boost::compute::buffer_iterator<T> d_in_begin(d_in);
     boost::compute::buffer_iterator<T> d_in_end(d_in + count);
     //write_device_time_series(d_in_begin, count, 1.f, "matched_filter.prep.d_in.tim");
 
     // Note: One extra element so that we include the final value
-    m_scanned.resize(count + 1, 0);
-    boost::compute::inclusive_scan(d_in_begin, d_in_end, m_scanned.begin() + 1);
-    boost::compute::system::default_queue().finish();
+    m_scanned.resize(count + 1, 0, queue);
+    boost::compute::inclusive_scan(d_in_begin, d_in_end, m_scanned.begin() + 1, queue);
+    queue.finish();
     //write_device_time_series(m_scanned.begin(), count + 1, 1.f, "matched_filter.prep.m_scanned.tim");
     return HD_NO_ERROR;
   }
@@ -38,7 +38,7 @@ public:
   // Note: This writes div_round_up(count + 1 - max_width, tscrunch) values to
   // d_out with a relative starting offset of max_width/2
   // Note: This does not apply any normalisation to the output
-  hd_error exec(buffer_iterator<T> d_out, hd_size filter_width, hd_size tscrunch = 1) {
+  hd_error exec(buffer_iterator<T> d_out, hd_size filter_width, hd_size tscrunch = 1, boost::compute::command_queue& queue = boost::compute::system::default_queue()) {
     // TODO: Check that prep( ) has been called
     // TODO: Check that width <= m_max_width
 
@@ -72,9 +72,10 @@ public:
     boost::compute::transform(
         // in_range1.begin(), in_range1.end(), in_range2.begin(), d_out_begin,
         in_range1_begin, in_range1_end, in_range2_begin, d_out_begin,
-        boost::compute::minus<T>());
+        boost::compute::minus<T>(),
+        queue);
+    queue.finish();
     //write_device_time_series(d_out_begin, out_count, 1.f, "matched_filter.exec.d_out.tim");
-    boost::compute::system::default_queue().finish();
 
     return HD_NO_ERROR;
   }
@@ -86,14 +87,14 @@ MatchedFilterPlan<T>::MatchedFilterPlan()
     : m_impl(new MatchedFilterPlan_impl<T>) {}
 template <typename T>
 hd_error MatchedFilterPlan<T>::prep(const boost::compute::buffer_iterator<T> d_in, hd_size count,
-                                    hd_size max_width) {
-  return m_impl->prep(d_in, count, max_width);
+                                    hd_size max_width, boost::compute::command_queue& queue) {
+  return m_impl->prep(d_in, count, max_width, queue);
   // return (*this)->prep(d_in, count, max_width);
 }
 template <typename T>
 hd_error MatchedFilterPlan<T>::exec(boost::compute::buffer_iterator<T> d_out, hd_size filter_width,
-                                    hd_size tscrunch) {
-  return m_impl->exec(d_out, filter_width, tscrunch);
+                                    hd_size tscrunch, boost::compute::command_queue& queue) {
+  return m_impl->exec(d_out, filter_width, tscrunch, queue);
 }
 
 // Explicit template instantiations for types used by other compilation units

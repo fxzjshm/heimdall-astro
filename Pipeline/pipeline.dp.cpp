@@ -45,13 +45,13 @@ using std::endl;
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
-  void stop_timer(Stopwatch &timer) {
-   boost::compute::system::default_queue().finish();
+  void stop_timer(Stopwatch &timer, boost::compute::command_queue& queue = boost::compute::system::default_queue()) {
+   queue.finish();
    timer.stop();
   }
 #else
   void start_timer(Stopwatch& timer) { }
-  void stop_timer(Stopwatch& timer) { }
+  void stop_timer(Stopwatch& timer, boost::compute::command_queue& queue = boost::compute::system::default_queue()) { }
 #endif // HD_BENCHMARK
 
 #include <utility>
@@ -485,9 +485,8 @@ hd_error hd_execute(hd_pipeline pl,
     device_vector_wrapper<hd_size> d_giant_members;
     device_vector_wrapper<hd_float> d_time_series(series_stride);
     device_vector_wrapper<hd_float> d_filtered_series(series_stride);
-    boost::compute::fill(d_filtered_series.begin(), d_filtered_series.end(), 0);
-    boost::compute::command_queue& default_queue = boost::compute::system::default_queue();
-    boost::compute::command_queue queue(default_queue.get_context(), default_queue.get_device());
+    boost::compute::command_queue queue(boost::compute::system::default_context(), boost::compute::system::default_device());
+    boost::compute::fill(d_filtered_series.begin(), d_filtered_series.end(), 0, queue);
 
     hd_size  cur_dm_scrunch = scrunch_factors[dm_idx];
     hd_size  cur_nsamps  = nsamps_computed / cur_dm_scrunch;
@@ -519,25 +518,28 @@ hd_error hd_execute(hd_pipeline pl,
     case 8:
         boost::compute::copy((unsigned char *)&pl->h_dm_series[offset],
                              (unsigned char *)&pl->h_dm_series[offset] + cur_nsamps,
-                             boost::compute::buffer_iterator<unsigned char>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(unsigned char))));
+                             boost::compute::buffer_iterator<unsigned char>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(unsigned char))),
+                             queue);
         break;
     case 16:
         boost::compute::copy((unsigned short *)&pl->h_dm_series[offset],
                              (unsigned short *)&pl->h_dm_series[offset] + cur_nsamps,
-                             boost::compute::buffer_iterator<unsigned short>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(unsigned short))));
+                             boost::compute::buffer_iterator<unsigned short>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(unsigned short))),
+                             queue);
         break;
     case 32:
         // Note: 32-bit implies float, not unsigned int
         boost::compute::copy((float *)&pl->h_dm_series[offset],
                              (float *)&pl->h_dm_series[offset] + cur_nsamps,
-                             boost::compute::buffer_iterator<float>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(float))));
+                             boost::compute::buffer_iterator<float>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(float))),
+                             queue);
         break;
     default:
       running_count--;
       m_condition_variable.notify_all();
       return HD_INVALID_NBITS;
     }
-    stop_timer(copy_timer);
+    stop_timer(copy_timer, queue);
     //write_device_time_series(time_series, cur_nsamps, 1.f, "after_copy.tim");
     
     // Remove the baseline
@@ -549,8 +551,8 @@ hd_error hd_execute(hd_pipeline pl,
     start_timer(baseline_timer);
     
     // TESTING
-    error = baseline_remover.exec(time_series, cur_nsamps, nsamps_smooth);
-    stop_timer(baseline_timer);
+    error = baseline_remover.exec(time_series, cur_nsamps, nsamps_smooth, queue);
+    stop_timer(baseline_timer, queue);
     if( error != HD_NO_ERROR ) {
       running_count--;
       m_condition_variable.notify_all();
@@ -567,14 +569,15 @@ hd_error hd_execute(hd_pipeline pl,
     // Normalise
     // ---------
     start_timer(normalise_timer);
-    hd_float rms = rms_getter.exec(time_series, cur_nsamps);
+    hd_float rms = rms_getter.exec(time_series, cur_nsamps, queue);
     boost::compute::transform(
         d_time_series.begin(), d_time_series.end(),
         boost::compute::make_constant_iterator(argument_wrapper("coeff", hd_float(1.0) / rms)),
         d_time_series.begin(),
-        boost::compute::multiplies<hd_float>());
-    boost::compute::system::default_queue().finish();
-    stop_timer(normalise_timer);
+        boost::compute::multiplies<hd_float>(),
+        queue);
+    queue.finish();
+    stop_timer(normalise_timer, queue);
     
     if( beam == 0 && dm_idx == write_dm && first_idx == 0 ) {
       // TESTING
@@ -595,8 +598,8 @@ hd_error hd_execute(hd_pipeline pl,
     // Create and prepare matched filtering operations
     start_timer(filter_timer);
     // Note: Filter width is relative to the current time resolution
-    matched_filter_plan.prep(time_series, cur_nsamps, rel_boxcar_max);
-    stop_timer(filter_timer);
+    matched_filter_plan.prep(time_series, cur_nsamps, rel_boxcar_max, queue);
+    stop_timer(filter_timer, queue);
     // --------------------------
 
     boost::compute::buffer_iterator<hd_float> filtered_series = d_filtered_series.begin();
@@ -631,7 +634,8 @@ hd_error hd_execute(hd_pipeline pl,
       
       error = matched_filter_plan.exec(filtered_series,
                                        rel_filter_width,
-                                       rel_tscrunch_width);
+                                       rel_tscrunch_width,
+                                       queue);
       
       if( error != HD_NO_ERROR ) {
         running_count--;
@@ -649,13 +653,14 @@ hd_error hd_execute(hd_pipeline pl,
         // recompute then RMS of the filtered time series, then use that for rescaling.
         // Note that this method reduces the S/N of injected pulses. For more information
         // see https://ui.adsabs.harvard.edu/abs/2021MNRAS.501.2316G/abstract [Appendix A]
-        hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered);
+        hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered, queue);
         boost::compute::transform(
             boost::compute::buffer_iterator<hd_float>(filtered_series),
             boost::compute::buffer_iterator<hd_float>(filtered_series) + cur_nsamps_filtered,
             boost::compute::make_constant_iterator(argument_wrapper("coeff", hd_float(1.0) / rms)),
             boost::compute::buffer_iterator<hd_float>(filtered_series),
-            boost::compute::multiplies<hd_float>());
+            boost::compute::multiplies<hd_float>(),
+            queue);
       }
       else
       {
@@ -667,12 +672,13 @@ hd_error hd_execute(hd_pipeline pl,
             boost::compute::buffer_iterator<hd_float>(filtered_series) + cur_nsamps_filtered,
             norm_val_iter,
             boost::compute::buffer_iterator<hd_float>(filtered_series),
-            boost::compute::multiplies<hd_float>());
+            boost::compute::multiplies<hd_float>(),
+            queue);
       }
-      boost::compute::system::default_queue().finish();
+      queue.finish();
       //write_device_time_series(filtered_series, cur_nsamps_filtered, 1.f, "post_rescaled.tim");
 
-      stop_timer(filter_timer);
+      stop_timer(filter_timer, queue);
       
       // if( beam == 0 && dm_idx == write_dm && first_idx == 0 &&
       //     filter_width == 8 ) {
@@ -702,7 +708,8 @@ hd_error hd_execute(hd_pipeline pl,
                                 d_giant_peaks,
                                 d_giant_inds,
                                 d_giant_begins,
-                                d_giant_ends);
+                                d_giant_ends,
+                                queue);
       
       if( error != HD_NO_ERROR ) {
         running_count--;
@@ -711,7 +718,7 @@ hd_error hd_execute(hd_pipeline pl,
       }
 #ifdef PRINT_BENCHMARKS
       Stopwatch final_process_watch;
-      boost::compute::system::default_queue().finish();
+      queue.finish();
       final_process_watch.start();
 #endif // PRINT_BENCHMARKS
       
@@ -727,24 +734,24 @@ hd_error hd_execute(hd_pipeline pl,
       boost::compute::transform(
           d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
           d_giant_inds.begin() + prev_giant_count,
-          transform_functor);
+          transform_functor, queue);
       boost::compute::transform(
           d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
           d_giant_begins.begin() + prev_giant_count,
-          transform_functor);
+          transform_functor, queue);
       boost::compute::transform(
           d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
           d_giant_ends.begin() + prev_giant_count,
-          transform_functor);
-      boost::compute::system::default_queue().finish();
+          transform_functor, queue);
+      queue.finish();
 
-      d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx);
-      d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
+      d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx, queue);
+      d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx, queue);
       // Note: This could be used to track total member samples if desired
-      d_giant_members.resize(d_giant_peaks.size(), 1);
+      d_giant_members.resize(d_giant_peaks.size(), 1, queue);
 
 #ifdef PRINT_BENCHMARKS
-      boost::compute::system::default_queue().finish();
+      queue.finish();
       final_process_watch.stop();
       std::cout << "final_process time:      " << final_process_watch.getTime() << " s"
                 << std::endl;
@@ -752,7 +759,7 @@ hd_error hd_execute(hd_pipeline pl,
       std::cout << "--------------------" << std::endl;
 #endif // PRINT_BENCHMARKS
       
-      stop_timer(giants_timer);
+      stop_timer(giants_timer, queue);
       
       // Bail if the candidate rate is too high
       hd_size total_giant_count = d_giant_peaks.size();
