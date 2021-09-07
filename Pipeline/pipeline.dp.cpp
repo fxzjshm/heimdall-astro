@@ -39,6 +39,8 @@ using std::endl;
 #include <boost/compute/algorithm.hpp>
 #include <boost/compute/lambda.hpp>
 
+#include "hd/utils/ThreadPool.h"
+
 #define HD_BENCHMARK
 
 #ifdef HD_BENCHMARK
@@ -71,8 +73,8 @@ struct hd_pipeline_t {
   // Memory buffers used during pipeline execution
   std::vector<hd_byte>    h_clean_filterbank;
   host_vector<hd_byte>    h_dm_series;
-  device_vector<hd_float> d_time_series;
-  device_vector<hd_float> d_filtered_series;
+  // device_vector<hd_float> d_time_series;
+  // device_vector<hd_float> d_filtered_series;
 };
 
 hd_error allocate_gpu(const hd_params params) {
@@ -396,26 +398,22 @@ hd_error hd_execute(hd_pipeline pl,
   start_timer(memory_timer);
   
   pl->h_dm_series.resize(series_stride * pl->params.dm_nbits/8 * dm_count);
-  pl->d_time_series.resize(series_stride);
-  pl->d_filtered_series.resize(series_stride, 0);
+  // pl->d_time_series.resize(series_stride);
+  // pl->d_filtered_series.resize(series_stride, 0);
   
   stop_timer(memory_timer);
   
-  RemoveBaselinePlan          baseline_remover;
-  GetRMSPlan                  rms_getter;
-  MatchedFilterPlan<hd_float> matched_filter_plan;
-  GiantFinder                 giant_finder;
 #ifdef PRINT_BENCHMARKS
   giant_finder_profile = {0, 0, 0, 0, 0, 0, 0, 0};
 #endif // PRINT_BENCHMARKS
 
-  device_vector_wrapper<hd_float> d_giant_peaks;
-  device_vector_wrapper<hd_size> d_giant_inds;
-  device_vector_wrapper<hd_size> d_giant_begins;
-  device_vector_wrapper<hd_size> d_giant_ends;
-  device_vector_wrapper<hd_size> d_giant_filter_inds;
-  device_vector_wrapper<hd_size> d_giant_dm_inds;
-  device_vector_wrapper<hd_size> d_giant_members;
+  device_vector_wrapper<hd_float> d_all_giant_peaks;
+  device_vector_wrapper<hd_size> d_all_giant_inds;
+  device_vector_wrapper<hd_size> d_all_giant_begins;
+  device_vector_wrapper<hd_size> d_all_giant_ends;
+  device_vector_wrapper<hd_size> d_all_giant_filter_inds;
+  device_vector_wrapper<hd_size> d_all_giant_dm_inds;
+  device_vector_wrapper<hd_size> d_all_giant_members;
 
   typedef boost::compute::buffer_iterator<hd_float> dev_float_ptr;
   typedef boost::compute::buffer_iterator<hd_size> dev_size_ptr;
@@ -453,6 +451,11 @@ hd_error hd_execute(hd_pipeline pl,
   if( pl->params.verbosity >= 2 ) {
     cout << "\tBeginning inner pipeline..." << endl;
   }
+
+  ThreadPool thread_pool(std::thread::hardware_concurrency());
+  std::mutex m_mutex;
+  std::condition_variable m_condition_variable;
+  std::atomic_size_t running_count(0);
   
   // TESTING
   hd_size write_dm = 0;
@@ -461,13 +464,40 @@ hd_error hd_execute(hd_pipeline pl,
   
   // For each DM
   for( hd_size dm_idx=0; dm_idx<dm_count; ++dm_idx ) {
+    running_count++;
+    thread_pool.enqueue([dm_idx,
+        &scrunch_factors, &nsamps_computed, &too_many_giants, &series_stride, &dm_list, &nsamps, &dm_count, &m_mutex, &pl, &running_count, &m_condition_variable,
+        &d_all_giant_peaks, &d_all_giant_inds, &d_all_giant_begins, &d_all_giant_ends, &d_all_giant_filter_inds, &d_all_giant_dm_inds, &d_all_giant_members,
+        &beam, &write_dm, &first_idx,
+        &copy_timer, &baseline_timer, &normalise_timer, &filter_timer, &giants_timer]() -> hd_error {
+    hd_error error = HD_NO_ERROR;
+    // TODO: separate command_queue
+    RemoveBaselinePlan          baseline_remover;
+    GetRMSPlan                  rms_getter;
+    MatchedFilterPlan<hd_float> matched_filter_plan;
+    GiantFinder                 giant_finder;
+    device_vector_wrapper<hd_float>d_giant_peaks;
+    device_vector_wrapper<hd_size> d_giant_inds;
+    device_vector_wrapper<hd_size> d_giant_begins;
+    device_vector_wrapper<hd_size> d_giant_ends;
+    device_vector_wrapper<hd_size> d_giant_filter_inds;
+    device_vector_wrapper<hd_size> d_giant_dm_inds;
+    device_vector_wrapper<hd_size> d_giant_members;
+    device_vector_wrapper<hd_float> d_time_series(series_stride);
+    device_vector_wrapper<hd_float> d_filtered_series(series_stride);
+    boost::compute::fill(d_filtered_series.begin(), d_filtered_series.end(), 0);
+    boost::compute::command_queue& default_queue = boost::compute::system::default_queue();
+    boost::compute::command_queue queue(default_queue.get_context(), default_queue.get_device());
+
     hd_size  cur_dm_scrunch = scrunch_factors[dm_idx];
     hd_size  cur_nsamps  = nsamps_computed / cur_dm_scrunch;
     hd_float cur_dt      = pl->params.dt * cur_dm_scrunch;
     
     // Bail if the candidate rate is too high
     if( too_many_giants ) {
-      break;
+      running_count--;
+      m_condition_variable.notify_all();
+      return HD_TOO_MANY_EVENTS;
     }
     
     if( pl->params.verbosity >= 4 ) {
@@ -480,7 +510,7 @@ hd_error hd_execute(hd_pipeline pl,
       cout << "\tBaselining and normalising each beam..." << endl;
     }
 
-    boost::compute::buffer_iterator<hd_float> time_series = pl->d_time_series.begin();
+    boost::compute::buffer_iterator<hd_float> time_series = d_time_series.begin();
 
     // Copy the time series to the device and convert to floats
     hd_size offset = dm_idx * series_stride * pl->params.dm_nbits/8;
@@ -503,6 +533,8 @@ hd_error hd_execute(hd_pipeline pl,
                              boost::compute::buffer_iterator<float>(time_series.get_buffer(), time_series.get_index() * (sizeof(hd_float) / sizeof(float))));
         break;
     default:
+      running_count--;
+      m_condition_variable.notify_all();
       return HD_INVALID_NBITS;
     }
     stop_timer(copy_timer);
@@ -520,6 +552,8 @@ hd_error hd_execute(hd_pipeline pl,
     error = baseline_remover.exec(time_series, cur_nsamps, nsamps_smooth);
     stop_timer(baseline_timer);
     if( error != HD_NO_ERROR ) {
+      running_count--;
+      m_condition_variable.notify_all();
       return throw_error(error);
     }
     
@@ -535,9 +569,9 @@ hd_error hd_execute(hd_pipeline pl,
     start_timer(normalise_timer);
     hd_float rms = rms_getter.exec(time_series, cur_nsamps);
     boost::compute::transform(
-        pl->d_time_series.begin(), pl->d_time_series.end(),
+        d_time_series.begin(), d_time_series.end(),
         boost::compute::make_constant_iterator(argument_wrapper("coeff", hd_float(1.0) / rms)),
-        pl->d_time_series.begin(),
+        d_time_series.begin(),
         boost::compute::multiplies<hd_float>());
     boost::compute::system::default_queue().finish();
     stop_timer(normalise_timer);
@@ -565,7 +599,7 @@ hd_error hd_execute(hd_pipeline pl,
     stop_timer(filter_timer);
     // --------------------------
 
-    boost::compute::buffer_iterator<hd_float> filtered_series = pl->d_filtered_series.begin();
+    boost::compute::buffer_iterator<hd_float> filtered_series = d_filtered_series.begin();
 
     // Note: Filtering is done using a combination of tscrunching and
     //         'proper' boxcar convolution. The parameter min_tscrunch_width
@@ -600,6 +634,8 @@ hd_error hd_execute(hd_pipeline pl,
                                        rel_tscrunch_width);
       
       if( error != HD_NO_ERROR ) {
+        running_count--;
+        m_condition_variable.notify_all();
         return throw_error(error);
       }
       // Divide and round up
@@ -669,6 +705,8 @@ hd_error hd_execute(hd_pipeline pl,
                                 d_giant_ends);
       
       if( error != HD_NO_ERROR ) {
+        running_count--;
+        m_condition_variable.notify_all();
         return throw_error(error);
       }
 #ifdef PRINT_BENCHMARKS
@@ -727,9 +765,38 @@ hd_error hd_execute(hd_pipeline pl,
       }
       
     } // End of filter width loop
+    // gather giant info
+    {
+      std::lock_guard lock(m_mutex);
+      auto old_size = d_all_giant_peaks.size();
+      auto new_size = old_size + d_giant_peaks.size();
+      d_all_giant_peaks.resize(new_size);
+      d_all_giant_inds.resize(new_size);
+      d_all_giant_begins.resize(new_size);
+      d_all_giant_ends.resize(new_size);
+      d_all_giant_filter_inds.resize(new_size);
+      d_all_giant_dm_inds.resize(new_size);
+      d_all_giant_members.resize(new_size);
+      boost::compute::copy(d_giant_peaks.begin(), d_giant_peaks.end(), d_all_giant_peaks.begin() + old_size);
+      boost::compute::copy(d_giant_inds.begin(), d_giant_inds.end(), d_all_giant_inds.begin() + old_size);
+      boost::compute::copy(d_giant_begins.begin(), d_giant_begins.end(), d_all_giant_begins.begin() + old_size);
+      boost::compute::copy(d_giant_ends.begin(), d_giant_ends.end(), d_all_giant_ends.begin() + old_size);
+      boost::compute::copy(d_giant_filter_inds.begin(), d_giant_filter_inds.end(), d_all_giant_filter_inds.begin() + old_size);
+      boost::compute::copy(d_giant_dm_inds.begin(), d_giant_dm_inds.end(), d_all_giant_dm_inds.begin() + old_size);
+      boost::compute::copy(d_giant_members.begin(), d_giant_members.end(), d_all_giant_members.begin() + old_size);
+      boost::compute::system::default_queue().finish();
+    }
+    running_count--;
+    m_condition_variable.notify_all();
+    return HD_NO_ERROR;
+  });
   } // End of DM loop
+  std::unique_lock lock(m_mutex);
+  m_condition_variable.wait(lock, [&running_count] {
+    return running_count == 0;
+  });
 
-  hd_size giant_count = d_giant_peaks.size();
+  hd_size giant_count = d_all_giant_peaks.size();
   if( pl->params.verbosity >= 2 ) {
     cout << "Giant count = " << giant_count << endl;
   }
@@ -751,13 +818,13 @@ hd_error hd_execute(hd_pipeline pl,
     boost::compute::buffer_iterator<hd_size> d_giant_labels_ptr = d_giant_labels.begin();
 
     RawCandidatesOnDevice d_giants;
-    d_giants.peaks = d_giant_peaks.begin();
-    d_giants.inds = d_giant_inds.begin();
-    d_giants.begins = d_giant_begins.begin();
-    d_giants.ends = d_giant_ends.begin();
-    d_giants.filter_inds = d_giant_filter_inds.begin();
-    d_giants.dm_inds = d_giant_dm_inds.begin();
-    d_giants.members = d_giant_members.begin();
+    d_giants.peaks = d_all_giant_peaks.begin();
+    d_giants.inds = d_all_giant_inds.begin();
+    d_giants.begins = d_all_giant_begins.begin();
+    d_giants.ends = d_all_giant_ends.begin();
+    d_giants.filter_inds = d_all_giant_filter_inds.begin();
+    d_giants.dm_inds = d_all_giant_dm_inds.begin();
+    d_giants.members = d_all_giant_members.begin();
 
     hd_size filter_count = get_filter_index(pl->params.boxcar_max) + 1;
 

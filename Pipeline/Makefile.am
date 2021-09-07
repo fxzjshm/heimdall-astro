@@ -8,11 +8,16 @@ libhdpipeline_la_SOURCES = default_params.C error.C parse_command_line.C clean_f
 nobase_include_HEADERS = hd/median_filter.h hd/error.h hd/types.h
 
 # To find the dedisp lib from bbarsdell
-AM_CPPFLAGS = -I$(top_srcdir) \
+AM_CPPFLAGS = -I/opt/boost.compute/include \
+          -I$(top_srcdir) \
 	      -I$(top_srcdir)/Network \
 	      -I$(top_srcdir)/Formats \
 	      @DEDISP_CFLAGS@ \
-          -std=c++17 -fPIE -lOpenCL
+          -DBOOST_COMPUTE_DEBUG_KERNEL_COMPILATION \
+          -DBOOST_COMPUTE_THREAD_SAFE \
+          -DBOOST_COMPUTE_HAVE_THREAD_LOCAL \
+          -std=c++17 -fPIE
+AM_LDFLAGS = -lOpenCL -pthread
 
 include $(top_srcdir)/config/Makefile.targets
 
