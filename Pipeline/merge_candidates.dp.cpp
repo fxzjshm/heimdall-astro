@@ -68,6 +68,25 @@ struct merge_candidates_functor {
     }
 };
 
+template <typename T>
+struct extract_struct_functor {
+    // argument_wrapper cannot be used here as here needs a literal
+    hd_size index;
+
+    extract_struct_functor(hd_size index_) : index(index_) {}
+
+    inline auto operator()() const {
+        std::string type_name = boost::compute::type_name<T>();
+        std::string name = std::string("extract_struct_functor_") + type_name + std::to_string(index); 
+        std::string source = ("{" + common_source + BOOST_COMPUTE_STRINGIZE_SOURCE(
+            return boost_tuple_get(c, index_placeholder);
+        }));
+        boost::replace_first(source, "index_placeholder", std::to_string(index));
+        auto func = BOOST_COMPUTE_FUNCTION_WITH_NAME_AND_SOURCE_STRING(T, name.c_str(), (const candidate_tuple c), source.c_str());
+        return func;
+    }
+};
+
 hd_error merge_candidates(hd_size count,
                           boost::compute::buffer_iterator<hd_size> d_labels,
                           RawCandidatesOnDevice d_cands,
@@ -107,68 +126,31 @@ hd_error merge_candidates(hd_size count,
 
     // Merge giants into groups according to the label
     // WARNING: BinaryFunction and BinaryPredicate is swapped for different API between thrust and Boost.Compute
-    /*
-    boost::compute::detail::dispatch_reduce_by_key_no_count_check(
-        labels_begin, labels_begin + count,
-        boost::compute::make_permutation_iterator(
-            boost::compute::make_zip_iterator(boost::make_tuple(cand_peaks_begin,
-                                                                cand_inds_begin,
-                                                                cand_begins_begin,
-                                                                cand_ends_begin,
-                                                                cand_filter_inds_begin,
-                                                                cand_dm_inds_begin,
-                                                                cand_members_begin)),
-            d_permutation.begin()),
-        discard_iterator_wrapper(), // keys output
-        boost::compute::make_zip_iterator(boost::make_tuple(group_peaks_begin,
-                                                            group_inds_begin,
-                                                            group_begins_begin,
-                                                            group_ends_begin,
-                                                            group_filter_inds_begin,
-                                                            group_dm_inds_begin,
-                                                            group_members_begin)),
-        merge_candidates_functor()(), boost::compute::equal_to<hd_size>(),
-        boost::compute::system::default_queue());
-    */
-    device_vector_wrapper<hd_size> d_key_out_1(count);
-    device_vector_wrapper<hd_size> d_key_out_2(count);
-    hd_size d_key_out_count_1 = 
-    boost::compute::reduce_by_key(
-        labels_begin, labels_begin + count,
-        boost::compute::make_permutation_iterator(cand_peaks_begin, d_permutation.begin()),
-        d_key_out_1.begin(), //discard_iterator_wrapper(), // keys output
-        group_peaks_begin,
-        boost::compute::max<hd_float>(),
-        boost::compute::equal_to<hd_size>()
-        ).first - d_key_out_1.begin();
-    hd_size d_key_out_count_2 = 
-    boost::compute::reduce_by_key(
-        labels_begin, labels_begin + count,
-        boost::compute::make_permutation_iterator(cand_members_begin, d_permutation.begin()),
-        d_key_out_2.begin(), //discard_iterator_wrapper(), // keys output
-        group_members_begin,
-        boost::compute::plus<hd_float>(),
-        boost::compute::equal_to<hd_size>()
-        ).first - d_key_out_2.begin();
+    boost::compute::vector<candidate_tuple> d_out(count);
+    hd_size group_count = 
+        boost::compute::detail::dispatch_reduce_by_key_no_count_check(
+            labels_begin, labels_begin + count,
+            boost::compute::make_permutation_iterator(
+                boost::compute::make_zip_iterator(boost::make_tuple(cand_peaks_begin,
+                                                                    cand_inds_begin,
+                                                                    cand_begins_begin,
+                                                                    cand_ends_begin,
+                                                                    cand_filter_inds_begin,
+                                                                    cand_dm_inds_begin,
+                                                                    cand_members_begin)),
+                d_permutation.begin()),
+            discard_iterator_wrapper(), // keys output
+            d_out.begin(),
+            merge_candidates_functor()(), boost::compute::equal_to<hd_size>(),
+            boost::compute::system::default_queue()).second - d_out.begin();
     boost::compute::system::default_queue().finish();
-    assert(d_key_out_count_1 == d_key_out_count_2);
-    // TODO: check
-    // TODO: gather/scatter?
-    boost::compute::copy(boost::compute::make_permutation_iterator(cand_inds_begin, d_key_out_1.begin()),
-                         boost::compute::make_permutation_iterator(cand_inds_begin, d_key_out_1.begin()) + d_key_out_count_1,
-                         group_inds_begin);
-    boost::compute::copy(boost::compute::make_permutation_iterator(cand_begins_begin, d_key_out_1.begin()),
-                         boost::compute::make_permutation_iterator(cand_begins_begin, d_key_out_1.begin()) + d_key_out_count_1,
-                         group_begins_begin);
-    boost::compute::copy(boost::compute::make_permutation_iterator(cand_ends_begin, d_key_out_1.begin()),
-                         boost::compute::make_permutation_iterator(cand_ends_begin, d_key_out_1.begin()) + d_key_out_count_1,
-                         group_ends_begin);
-    boost::compute::copy(boost::compute::make_permutation_iterator(cand_filter_inds_begin, d_key_out_1.begin()),
-                         boost::compute::make_permutation_iterator(cand_filter_inds_begin, d_key_out_1.begin()) + d_key_out_count_1,
-                         group_filter_inds_begin);
-    boost::compute::copy(boost::compute::make_permutation_iterator(cand_dm_inds_begin, d_key_out_1.begin()),
-                         boost::compute::make_permutation_iterator(cand_dm_inds_begin, d_key_out_1.begin()) + d_key_out_count_1,
-                         group_dm_inds_begin);
+    boost::compute::transform(d_out.begin(), d_out.begin() + group_count, group_peaks_begin, extract_struct_functor<hd_float>(0)());
+    boost::compute::transform(d_out.begin(), d_out.begin() + group_count, group_inds_begin, extract_struct_functor<hd_size>(1)());
+    boost::compute::transform(d_out.begin(), d_out.begin() + group_count, group_begins_begin, extract_struct_functor<hd_size>(2)());
+    boost::compute::transform(d_out.begin(), d_out.begin() + group_count, group_ends_begin, extract_struct_functor<hd_size>(3)());
+    boost::compute::transform(d_out.begin(), d_out.begin() + group_count, group_filter_inds_begin, extract_struct_functor<hd_size>(4)());
+    boost::compute::transform(d_out.begin(), d_out.begin() + group_count, group_dm_inds_begin, extract_struct_functor<hd_size>(5)());
+    boost::compute::transform(d_out.begin(), d_out.begin() + group_count, group_members_begin, extract_struct_functor<hd_size>(6)());
     boost::compute::system::default_queue().finish();
     //write_device_time_series(d_key_out_1.begin(), d_key_out_count_1, 1.f, "merge_candidates.d_key_out_1.not_tim");
     //write_device_time_series(d_key_out_2.begin(), d_key_out_count_2, 1.f, "merge_candidates.d_key_out_2.not_tim");

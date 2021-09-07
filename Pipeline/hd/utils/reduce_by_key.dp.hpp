@@ -114,6 +114,48 @@ dispatch_reduce_by_key(InputKeyIterator keys_first,
         );
 }
 
+template<class InputKeyIterator, class InputValueIterator,
+         class OutputKeyIterator, class OutputValueIterator,
+         class BinaryFunction, class BinaryPredicate>
+inline std::pair<OutputKeyIterator, OutputValueIterator>
+dispatch_reduce_by_key_no_count_check(InputKeyIterator keys_first,
+                       InputKeyIterator keys_last,
+                       InputValueIterator values_first,
+                       OutputKeyIterator keys_result,
+                       OutputValueIterator values_result,
+                       BinaryFunction function,
+                       BinaryPredicate predicate,
+                       command_queue &queue)
+{
+    typedef typename
+        std::iterator_traits<OutputKeyIterator>::difference_type key_difference_type;
+    typedef typename
+        std::iterator_traits<OutputValueIterator>::difference_type value_difference_type;
+
+    const size_t count = detail::iterator_range_size(keys_first, keys_last);
+
+    size_t result_size = 0;
+    if(reduce_by_key_on_gpu_requirements_met(keys_first, values_first, keys_result,
+                                             values_result, count, queue)){
+        result_size =
+            detail::reduce_by_key_on_gpu(keys_first, keys_last, values_first,
+                                         keys_result, values_result, function,
+                                         predicate, queue);
+    }
+    else {
+        result_size =
+              detail::serial_reduce_by_key(keys_first, keys_last, values_first,
+                                           keys_result, values_result, function,
+                                           predicate, queue);
+    }
+
+    return
+        std::make_pair<OutputKeyIterator, OutputValueIterator>(
+            keys_result + static_cast<key_difference_type>(result_size),
+            values_result + static_cast<value_difference_type>(result_size)
+        );
+}
+
 } // end detail namespace
 } // end compute namespace
 } // end boost namespace
