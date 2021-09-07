@@ -47,7 +47,7 @@ template <typename T>
 struct abs_less_than {
   argument_wrapper<T> thresh;
   abs_less_than(T thresh_) : WRAP_ARG(thresh, thresh_) {}
-  inline bool operator()() const {
+  inline auto operator()() const {
     // using boost::compute::lambda::fabs;
     // using boost::compute::lambda::_1;
     // return fabs(_1) < thresh;
