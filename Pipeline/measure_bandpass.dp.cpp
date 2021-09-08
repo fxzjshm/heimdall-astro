@@ -39,7 +39,8 @@ struct unpack_functor {
 
 template <typename T>
 constexpr auto abs_val() {
-    using namespace boost::compute::lambda;
+    using boost::compute::lambda::_1;
+    using boost::compute::lambda::fabs;
     return fabs(_1);
 }
 
