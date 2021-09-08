@@ -452,7 +452,7 @@ hd_error hd_execute(hd_pipeline pl,
     cout << "\tBeginning inner pipeline..." << endl;
   }
 
-  ThreadPool thread_pool(std::thread::hardware_concurrency());
+  ThreadPool thread_pool(pl->params.ncpus);
   std::mutex m_mutex;
   std::condition_variable m_condition_variable;
   std::atomic_size_t running_count(0);
