@@ -10,6 +10,8 @@
 // See http://boostorg.github.com/compute for more information.
 //---------------------------------------------------------------------------//
 
+// modification: set buffer index(offset) as kernel parameter instead of literal to avoid re-compiling
+
 #ifndef BOOST_COMPUTE_ITERATOR_BUFFER_ITERATOR_HPP
 #define BOOST_COMPUTE_ITERATOR_BUFFER_ITERATOR_HPP
 
