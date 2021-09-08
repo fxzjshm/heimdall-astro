@@ -471,21 +471,27 @@ hd_error hd_execute(hd_pipeline pl,
         &beam, &write_dm, &first_idx,
         &copy_timer, &baseline_timer, &normalise_timer, &filter_timer, &giants_timer]() -> hd_error {
     hd_error error = HD_NO_ERROR;
-    // TODO: separate command_queue
-    RemoveBaselinePlan          baseline_remover;
-    GetRMSPlan                  rms_getter;
-    MatchedFilterPlan<hd_float> matched_filter_plan;
-    GiantFinder                 giant_finder;
-    device_vector_wrapper<hd_float>d_giant_peaks;
-    device_vector_wrapper<hd_size> d_giant_inds;
-    device_vector_wrapper<hd_size> d_giant_begins;
-    device_vector_wrapper<hd_size> d_giant_ends;
-    device_vector_wrapper<hd_size> d_giant_filter_inds;
-    device_vector_wrapper<hd_size> d_giant_dm_inds;
-    device_vector_wrapper<hd_size> d_giant_members;
-    device_vector_wrapper<hd_float> d_time_series(series_stride);
-    device_vector_wrapper<hd_float> d_filtered_series(series_stride);
+    thread_local RemoveBaselinePlan          baseline_remover;
+    thread_local GetRMSPlan                  rms_getter;
+    thread_local MatchedFilterPlan<hd_float> matched_filter_plan;
+    thread_local GiantFinder                 giant_finder;
+    thread_local device_vector_wrapper<hd_float>d_giant_peaks;
+    thread_local device_vector_wrapper<hd_size> d_giant_inds;
+    thread_local device_vector_wrapper<hd_size> d_giant_begins;
+    thread_local device_vector_wrapper<hd_size> d_giant_ends;
+    thread_local device_vector_wrapper<hd_size> d_giant_filter_inds;
+    thread_local device_vector_wrapper<hd_size> d_giant_dm_inds;
+    thread_local device_vector_wrapper<hd_size> d_giant_members;
+    thread_local device_vector_wrapper<hd_float> d_time_series(series_stride);
+    thread_local device_vector_wrapper<hd_float> d_filtered_series(series_stride);
     boost::compute::command_queue queue(boost::compute::system::default_context(), boost::compute::system::default_device());
+    d_giant_peaks.clear();
+    d_giant_inds.clear();
+    d_giant_begins.clear();
+    d_giant_ends.clear();
+    d_giant_filter_inds.clear();
+    d_giant_dm_inds.clear();
+    d_giant_members.clear();
     boost::compute::fill(d_filtered_series.begin(), d_filtered_series.end(), 0, queue);
 
     hd_size  cur_dm_scrunch = scrunch_factors[dm_idx];
@@ -797,6 +803,13 @@ hd_error hd_execute(hd_pipeline pl,
     m_condition_variable.notify_all();
     return HD_NO_ERROR;
   });
+  // wait for the first one to generate kernel cache
+  if (dm_idx == 0) {
+    std::unique_lock lock(m_mutex);
+    m_condition_variable.wait(lock, [&running_count] {
+      return running_count == 0;
+    });
+  }
   } // End of DM loop
   std::unique_lock lock(m_mutex);
   m_condition_variable.wait(lock, [&running_count] {
