@@ -145,16 +145,16 @@ struct trace_equivalency_chain {
 };
 
 struct cluster_functor {
-	hd_size  count;
+	argument_wrapper<hd_size>  count;
 	const boost::compute::buffer_iterator<hd_size> d_samp_inds;
 	const boost::compute::buffer_iterator<hd_size> d_begins;
 	const boost::compute::buffer_iterator<hd_size> d_ends;
 	const boost::compute::buffer_iterator<hd_size> d_filters;
 	const boost::compute::buffer_iterator<hd_size> d_dms;
 	boost::compute::buffer_iterator<hd_size> d_labels;
-	hd_size  time_tol;
-	hd_size  filter_tol;
-	hd_size  dm_tol;
+	argument_wrapper<hd_size>  time_tol;
+	argument_wrapper<hd_size>  filter_tol;
+	argument_wrapper<hd_size>  dm_tol;
 	
 	cluster_functor(hd_size count_,
 	                const boost::compute::buffer_iterator<hd_size> d_samp_inds_,
@@ -164,12 +164,12 @@ struct cluster_functor {
                     const boost::compute::buffer_iterator<hd_size> d_dms_,
 	                boost::compute::buffer_iterator<hd_size> d_labels_,
 	                hd_size time_tol_, hd_size filter_tol_, hd_size dm_tol_)
-		: count(count_),
+		: WRAP_ARG(count, count_),
 		  d_samp_inds(d_samp_inds_),
 		  d_begins(d_begins_), d_ends(d_ends_),
 		  d_filters(d_filters_), d_dms(d_dms_),
 		  d_labels(d_labels_),
-		  time_tol(time_tol_), filter_tol(filter_tol_), dm_tol(dm_tol_) {}
+		  WRAP_ARG(time_tol, time_tol_), WRAP_ARG(filter_tol, filter_tol_), WRAP_ARG(dm_tol, dm_tol_) {}
 
     inline auto operator()() const {
 	BOOST_COMPUTE_CLOSURE_WITH_SOURCE_STRING(void, cluster_functor, (unsigned int i),

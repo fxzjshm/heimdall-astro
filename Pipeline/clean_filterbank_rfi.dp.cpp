@@ -66,18 +66,18 @@ struct zap_fb_rfi_functor {
   enum { MAX_RESAMPLE_ATTEMPTS = 10 };
   const boost::compute::buffer_iterator<int>      mask;
   const boost::compute::buffer_iterator<WordType> in;
-  unsigned int    stride;
-  unsigned int    nbits;
-  unsigned int    nsamps;
-  unsigned int    max_resample_dist;
-  WordType        bitmask;
+  argument_wrapper<unsigned int>    stride;
+  argument_wrapper<unsigned int>    nbits;
+  argument_wrapper<unsigned int>    nsamps;
+  argument_wrapper<unsigned int>    max_resample_dist;
+  argument_wrapper<WordType>        bitmask;
   zap_fb_rfi_functor(const boost::compute::buffer_iterator<int> mask_,
                      const boost::compute::buffer_iterator<WordType> in_,
                      unsigned int stride_, unsigned int nbits_,
                      unsigned int nsamps_, unsigned int max_resample_dist_)
     : mask(mask_), in(in_),
-      stride(stride_), nbits(nbits_), bitmask((1<<nbits)-1),
-      nsamps(nsamps_), max_resample_dist(max_resample_dist_) {}
+      WRAP_ARG(stride, stride_), WRAP_ARG(nbits, nbits_), WRAP_ARG(bitmask, (1<<nbits_)-1),
+      WRAP_ARG(nsamps, nsamps_), WRAP_ARG(max_resample_dist, max_resample_dist_) {}
   inline auto operator()() const {
     std::string type_name = boost::compute::type_name<WordType>();
     std::string name = std::string("zap_fb_rfi_functor_") + type_name;
@@ -509,7 +509,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           d_rfi_mask.begin(),
           boost::compute::logical_or<int>());
       boost::compute::system::default_queue().finish();
-      //write_device_time_series(d_rfi_mask.begin(), d_rfi_mask.size(), 1.f, "clean_filterbank_rfi_d_rfi_mask_merged.tim");
+      //write_vector(d_rfi_mask, "clean_filterbank_rfi_d_rfi_mask_merged");
     }
     // h_rfi_mask = d_rfi_mask;
     device_to_host_copy(d_rfi_mask, h_rfi_mask);
