@@ -452,21 +452,19 @@ hd_error hd_execute(hd_pipeline pl,
     cout << "\tBeginning inner pipeline..." << endl;
   }
 
-  ThreadPool thread_pool(pl->params.ncpus);
-  std::mutex m_mutex;
-  std::condition_variable m_condition_variable;
-  std::atomic_size_t running_count(0);
   
   // TESTING
   hd_size write_dm = 0;
   
   bool too_many_giants = false;
   
+  {
+  ThreadPool thread_pool(pl->params.ncpus);
+  std::mutex m_mutex;
   // For each DM
   for( hd_size dm_idx=0; dm_idx<dm_count; ++dm_idx ) {
-    running_count++;
-    thread_pool.enqueue([dm_idx,
-        &scrunch_factors, &nsamps_computed, &too_many_giants, &series_stride, &dm_list, &nsamps, &dm_count, &m_mutex, &pl, &running_count, &m_condition_variable,
+    auto inner_function = [dm_idx,
+        &scrunch_factors, &nsamps_computed, &too_many_giants, &series_stride, &dm_list, &nsamps, &dm_count, &m_mutex, &pl,
         &d_all_giant_peaks, &d_all_giant_inds, &d_all_giant_begins, &d_all_giant_ends, &d_all_giant_filter_inds, &d_all_giant_dm_inds, &d_all_giant_members,
         &beam, &write_dm, &first_idx,
         &copy_timer, &baseline_timer, &normalise_timer, &filter_timer, &giants_timer]() -> hd_error {
@@ -484,7 +482,7 @@ hd_error hd_execute(hd_pipeline pl,
     thread_local device_vector_wrapper<hd_size> d_giant_members;
     thread_local device_vector_wrapper<hd_float> d_time_series(series_stride);
     thread_local device_vector_wrapper<hd_float> d_filtered_series(series_stride);
-    boost::compute::command_queue queue(boost::compute::system::default_context(), boost::compute::system::default_device());
+    thread_local boost::compute::command_queue queue(boost::compute::system::default_context(), boost::compute::system::default_device());
     d_giant_peaks.clear();
     d_giant_inds.clear();
     d_giant_begins.clear();
@@ -500,8 +498,6 @@ hd_error hd_execute(hd_pipeline pl,
     
     // Bail if the candidate rate is too high
     if( too_many_giants ) {
-      running_count--;
-      m_condition_variable.notify_all();
       return HD_TOO_MANY_EVENTS;
     }
     
@@ -541,8 +537,6 @@ hd_error hd_execute(hd_pipeline pl,
                              queue);
         break;
     default:
-      running_count--;
-      m_condition_variable.notify_all();
       return HD_INVALID_NBITS;
     }
     stop_timer(copy_timer, queue);
@@ -560,8 +554,6 @@ hd_error hd_execute(hd_pipeline pl,
     error = baseline_remover.exec(time_series, cur_nsamps, nsamps_smooth, queue);
     stop_timer(baseline_timer, queue);
     if( error != HD_NO_ERROR ) {
-      running_count--;
-      m_condition_variable.notify_all();
       return throw_error(error);
     }
     
@@ -644,8 +636,6 @@ hd_error hd_execute(hd_pipeline pl,
                                        queue);
       
       if( error != HD_NO_ERROR ) {
-        running_count--;
-        m_condition_variable.notify_all();
         return throw_error(error);
       }
       // Divide and round up
@@ -718,8 +708,6 @@ hd_error hd_execute(hd_pipeline pl,
                                 queue);
       
       if( error != HD_NO_ERROR ) {
-        running_count--;
-        m_condition_variable.notify_all();
         return throw_error(error);
       }
 #ifdef PRINT_BENCHMARKS
@@ -799,22 +787,16 @@ hd_error hd_execute(hd_pipeline pl,
       boost::compute::copy(d_giant_members.begin(), d_giant_members.end(), d_all_giant_members.begin() + old_size);
       boost::compute::system::default_queue().finish();
     }
-    running_count--;
-    m_condition_variable.notify_all();
     return HD_NO_ERROR;
-  });
+  };
   // wait for the first one to generate kernel cache
-  if (dm_idx == 0) {
-    std::unique_lock lock(m_mutex);
-    m_condition_variable.wait(lock, [&running_count] {
-      return running_count == 0;
-    });
+  if (dm_idx != 0) {
+    inner_function();
+  } else {
+    thread_pool.enqueue(inner_function);
   }
   } // End of DM loop
-  std::unique_lock lock(m_mutex);
-  m_condition_variable.wait(lock, [&running_count] {
-    return running_count == 0;
-  });
+  }
 
   hd_size giant_count = d_all_giant_peaks.size();
   if( pl->params.verbosity >= 2 ) {
