@@ -716,33 +716,34 @@ hd_error hd_execute(hd_pipeline pl,
       final_process_watch.start();
 #endif // PRINT_BENCHMARKS
       
-      hd_size rel_cur_filtered_offset = (cur_filtered_offset /
-                                         rel_tscrunch_width);
-      argument_wrapper<hd_size> rel_cur_filtered_offset_wrapper("rel_cur_filtered_offset", rel_cur_filtered_offset);
-      argument_wrapper<hd_size> cur_scrunch_wrapper("cur_scrunch", cur_scrunch);
-      BOOST_COMPUTE_CLOSURE(hd_size, transform_functor, (hd_size x), (rel_cur_filtered_offset_wrapper, cur_scrunch_wrapper), {
-          return /*first_idx +*/ (x + rel_cur_filtered_offset_wrapper) * cur_scrunch_wrapper;
-      });
+      if(prev_giant_count < d_giant_peaks.size()){
+        hd_size rel_cur_filtered_offset = (cur_filtered_offset /
+                                           rel_tscrunch_width);
+        argument_wrapper<hd_size> rel_cur_filtered_offset_wrapper("rel_cur_filtered_offset", rel_cur_filtered_offset);
+        argument_wrapper<hd_size> cur_scrunch_wrapper("cur_scrunch", cur_scrunch);
+        BOOST_COMPUTE_CLOSURE(hd_size, transform_functor, (hd_size x), (rel_cur_filtered_offset_wrapper, cur_scrunch_wrapper), {
+            return /*first_idx +*/ (x + rel_cur_filtered_offset_wrapper) * cur_scrunch_wrapper;
+        });
 
-      using boost::compute::lambda::_1;
-      boost::compute::transform(
-          d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
-          d_giant_inds.begin() + prev_giant_count,
-          transform_functor, queue);
-      boost::compute::transform(
-          d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
-          d_giant_begins.begin() + prev_giant_count,
-          transform_functor, queue);
-      boost::compute::transform(
-          d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
-          d_giant_ends.begin() + prev_giant_count,
-          transform_functor, queue);
-      queue.finish();
+        boost::compute::transform(
+            d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
+            d_giant_inds.begin() + prev_giant_count,
+            transform_functor, queue);
+        boost::compute::transform(
+            d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
+            d_giant_begins.begin() + prev_giant_count,
+            transform_functor, queue);
+        boost::compute::transform(
+            d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
+            d_giant_ends.begin() + prev_giant_count,
+            transform_functor, queue);
 
-      d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx, queue);
-      d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx, queue);
-      // Note: This could be used to track total member samples if desired
-      d_giant_members.resize(d_giant_peaks.size(), 1, queue);
+        d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx, queue);
+        d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx, queue);
+        // Note: This could be used to track total member samples if desired
+        d_giant_members.resize(d_giant_peaks.size(), 1, queue);
+        queue.finish();
+      }
 
 #ifdef PRINT_BENCHMARKS
       queue.finish();
