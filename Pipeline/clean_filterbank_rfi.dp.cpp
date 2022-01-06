@@ -98,8 +98,7 @@ struct zap_fb_rfi_functor {
       result = 0;
       // Iterate over channels in the word
       for( int k=0; k<(int)(sizeof(WordType)*8); k+=nbits ) {
-        unsigned int min_t = t > max_resample_dist ?
-          t - max_resample_dist : 0;
+        unsigned int min_t = sub_sat(t, max_resample_dist);
         unsigned int max_t = t < nsamps-1 - max_resample_dist ?
           t + max_resample_dist : nsamps-1;
         unsigned int new_t = (MWC64X_NextUint(&rng) % (max_t - min_t)) + min_t;
