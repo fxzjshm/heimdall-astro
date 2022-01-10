@@ -480,8 +480,8 @@ hd_error hd_execute(hd_pipeline pl,
     thread_local device_vector_wrapper<hd_size>  d_giant_filter_inds;
     thread_local device_vector_wrapper<hd_size>  d_giant_dm_inds;
     thread_local device_vector_wrapper<hd_size>  d_giant_members;
-    thread_local device_vector_wrapper<hd_float> d_time_series(series_stride);
-    thread_local device_vector_wrapper<hd_float> d_filtered_series(series_stride);
+    thread_local device_vector_wrapper<hd_float> d_time_series;
+    thread_local device_vector_wrapper<hd_float> d_filtered_series;
     thread_local boost::compute::command_queue queue(boost::compute::system::default_context(), boost::compute::system::default_device());
     d_giant_peaks.clear();
     d_giant_inds.clear();
@@ -490,6 +490,8 @@ hd_error hd_execute(hd_pipeline pl,
     d_giant_filter_inds.clear();
     d_giant_dm_inds.clear();
     d_giant_members.clear();
+    d_time_series.resize(series_stride);
+    d_filtered_series.resize(series_stride);
     boost::compute::fill(d_filtered_series.begin(), d_filtered_series.end(), 0, queue);
 
     hd_size  cur_dm_scrunch = scrunch_factors[dm_idx];
