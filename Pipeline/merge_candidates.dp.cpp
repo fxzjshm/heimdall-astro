@@ -114,11 +114,23 @@ hd_error merge_candidates(hd_size count,
     size_iterator group_dm_inds_begin(d_groups.dm_inds);
     size_iterator group_members_begin(d_groups.members);
 
+    boost::compute::command_queue queue = boost::compute::system::default_queue();
+    boost::compute::device device = queue.get_device();
+
     // Sort by labels and remember permutation
     device_vector_wrapper<hd_size> d_permutation(count);
     boost::compute::iota(d_permutation.begin(), d_permutation.end(), 0);
     boost::compute::system::default_queue().finish();
     //write_device_time_series(labels_begin, count, 1.f, "merge_candidates.d_labels.1.not_tim");
+    
+    // patch sort_by_key for clvk cause clspv don't support uint16 now
+    if (device.platform().name().find("clvk") != std::string::npos) {
+        std::string cache_key = std::string("__boost_radix_sort_") + boost::compute::type_name<typename std::iterator_traits<size_iterator>::value_type>()
+            + std::string("_with_") + boost::compute::type_name<typename std::iterator_traits<decltype(d_permutation.begin())>::value_type>();
+        auto cache = boost::compute::detail::parameter_cache::get_global_cache(device);
+        cache->set(cache_key, "k", 2);
+    }
+    
     boost::compute::sort_by_key(labels_begin, labels_begin + count, d_permutation.begin());
     //write_device_time_series(labels_begin, count, 1.f, "merge_candidates.d_labels.2.not_tim");
     //write_vector(d_permutation, "merge_candidates.d_permutation.2");
