@@ -18,7 +18,7 @@ AM_CPPFLAGS = -I/opt/boost.compute/include \
           -DBOOST_COMPUTE_HAVE_THREAD_LOCAL \
           -DBOOST_COMPUTE_USE_OFFLINE_CACHE \
           -std=c++17 -fPIE
-AM_LDFLAGS = -lOpenCL -pthread -lboost_system -lboost_filesystem
+AM_LDFLAGS = -lOpenCL -ldedisp -pthread -lboost_system -lboost_filesystem -lstdc++ -lm
 
 include $(top_srcdir)/config/Makefile.targets
 
