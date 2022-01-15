@@ -24,9 +24,9 @@
 //#include "hd/write_time_series.h"
 #include <iostream>
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
 GiantFinder_profile giant_finder_profile;
-#endif // PRINT_BENCHMARKS
+#endif // HD_BENCHMARK
 
 template <typename T> struct greater_than_val {
   argument_wrapper<T> val;
@@ -132,7 +132,7 @@ public:
     const_float_ptr d_data_begin(d_data);
     const_float_ptr d_data_end(d_data + count);
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     Stopwatch timer;
 
     timer.start();
@@ -156,11 +156,13 @@ public:
       return HD_NO_ERROR;
     }
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     queue.finish();
     timer.stop();
+#ifdef PRINT_BENCHMARKS
     std::cout << "count_if time:           " << timer.getTime() << " s"
               << std::endl;
+#endif
     giant_finder_profile.count_if_time += timer.getTime();
     timer.reset();
 
@@ -170,11 +172,13 @@ public:
     d_giant_data.resize(giant_data_count, queue);
     d_giant_data_inds.resize(giant_data_count, queue);
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     queue.finish();
     timer.stop();
+#ifdef PRINT_BENCHMARKS
     std::cout << "giant_data resize time:  " << timer.getTime() << " s"
               << std::endl;
+#endif
     giant_finder_profile.giant_data_resize_time += timer.getTime();
     timer.reset();
 
@@ -206,11 +210,13 @@ public:
     //write_vector(d_giant_data_inds, "find_giants.d_giant_data_inds");
     
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     queue.finish();
     timer.stop();
+#ifdef PRINT_BENCHMARKS
     std::cout << "giant_data copy_if time: " << timer.getTime() << " s"
               << std::endl;
+#endif
     giant_finder_profile.giant_data_copy_if_time += timer.getTime();
     timer.reset();
 
@@ -264,11 +270,13 @@ public:
     // Report back the actual number of giants found
     // total_giant_count = giant_count;
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     queue.finish();
     timer.stop();
+#ifdef PRINT_BENCHMARKS
     std::cout << "giant segments time:     " << timer.getTime() << " s"
               << std::endl;
+#endif
     giant_finder_profile.giant_segments_time += timer.getTime();
     timer.reset();
 
@@ -286,11 +294,13 @@ public:
     size_ptr new_giant_begins_begin = d_giant_begins.begin() + new_giants_offset;
     size_ptr new_giant_ends_begin = d_giant_ends.begin() + new_giants_offset;
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     queue.finish();
     timer.stop();
+#ifdef PRINT_BENCHMARKS
     std::cout << "giants resize time:      " << timer.getTime() << " s"
               << std::endl;
+#endif
     giant_finder_profile.giants_resize_time += timer.getTime();
     timer.reset();
 
@@ -317,11 +327,13 @@ public:
     //write_vector(d_giant_peaks, "find_giants.d_giant_peaks");
     //write_vector(d_giant_inds, "find_giants.d_giant_inds");
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     queue.finish();
     timer.stop();
+#ifdef PRINT_BENCHMARKS
     std::cout << "reduce_by_key time:      " << timer.getTime() << " s"
               << std::endl;
+#endif
     giant_finder_profile.reduce_by_key_time += timer.getTime();
     timer.reset();
 
@@ -360,11 +372,13 @@ public:
     //write_vector(d_giant_begins, "find_giants.d_giant_begins_2");
     //write_vector(d_giant_ends, "find_giants.d_giant_ends_2");
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
     queue.finish();
     timer.stop();
+#ifdef PRINT_BENCHMARKS
     std::cout << "begin/end copy_if time:  " << timer.getTime() << " s"
               << std::endl;
+#endif
     giant_finder_profile.begin_end_copy_if_time += timer.getTime();
     timer.reset();
 #endif

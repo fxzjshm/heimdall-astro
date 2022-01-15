@@ -17,6 +17,7 @@
 #include "hd/utils/device_vector_wrapper.dp.hpp"
 
 //#define PRINT_BENCHMARKS
+#define HD_BENCHMARK
 
 struct GiantFinder_impl;
 
@@ -34,7 +35,7 @@ private:
 	boost::shared_ptr<GiantFinder_impl> m_impl;
 };
 
-#ifdef PRINT_BENCHMARKS
+#ifdef HD_BENCHMARK
 struct GiantFinder_profile {
     float count_if_time;
     float giant_data_resize_time;
@@ -47,4 +48,4 @@ struct GiantFinder_profile {
 };
 
 extern GiantFinder_profile giant_finder_profile;
-#endif // PRINT_BENCHMARKS
+#endif // HD_BENCHMARK
