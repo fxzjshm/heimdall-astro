@@ -5,14 +5,17 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
+#if __has_include(<sycl/sycl.hpp>)
+#include <sycl/sycl.hpp>
+#else
 #include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
+#endif
+
 #include "hd/get_rms.h"
 #include "hd/median_filter.h"
-#include <dpct/dpl_utils.hpp>
 #include "hd/utils.hpp"
+
+#include <dpct/dpl_extras/iterators.h>
 
 template <typename T>
 struct absolute_val {
@@ -25,6 +28,7 @@ class GetRMSPlan_impl {
 
 public:
 	hd_float exec(hd_float* d_data, hd_size count) {
+        
         dpct::device_pointer<hd_float> d_data_begin(d_data);
 
         // This algorithm works by taking the absolute values of the data
@@ -34,15 +38,10 @@ public:
 		
 		buf1.resize(count);
 		buf2.resize(count/5);
-/* DPCT_ORIG 		hd_float* buf1_ptr =
- * thrust::raw_pointer_cast(&buf1[0]);*/
         hd_float *buf1_ptr = dpct::get_raw_pointer(&buf1[0]);
-/* DPCT_ORIG 		hd_float* buf2_ptr =
- * thrust::raw_pointer_cast(&buf2[0]);*/
         hd_float *buf2_ptr = dpct::get_raw_pointer(&buf2[0]);
 
-/* DPCT_ORIG 		thrust::transform(d_data_begin, d_data_begin+count,*/
-        std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        sycl::impl::transform(execution_policy,
                                d_data_begin, d_data_begin + count, buf1.begin(),
                                absolute_val<hd_float>());
 
@@ -51,7 +50,6 @@ public:
 			std::swap(buf1_ptr, buf2_ptr);
 		}
 		// Note: Result is now at buf1_ptr
-/* DPCT_ORIG 		thrust::device_ptr<hd_float> buf1_begin(buf1_ptr);*/
         dpct::device_pointer<hd_float> buf1_begin(buf1_ptr);
         hd_float med_abs_dev = buf1_begin[0];
 		hd_float rms = med_abs_dev * 1.4862;
@@ -73,21 +71,15 @@ hd_float get_rms(hd_float* d_data, hd_size count) {
 }
 hd_error normalise(hd_float* d_data, hd_size count)
 {
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_data_begin(d_data);*/
+        
         dpct::device_pointer<hd_float> d_data_begin(d_data);
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_data_end(d_data + count);*/
         dpct::device_pointer<hd_float> d_data_end(d_data + count);
 
         hd_float rms = get_rms(d_data, count);
-        /* DPCT_ORIG 	thrust::transform(d_data_begin, d_data_end,*/
-        std::transform(// oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                           std::execution::par,
+        sycl::impl::transform(execution_policy,
                            d_data_begin, d_data_end,
-                           /* DPCT_ORIG
-                          thrust::make_constant_iterator(hd_float(1.0)/rms),*/
                            dpct::make_constant_iterator(hd_float(1.0) / rms),
                            d_data_begin,
-                           /* DPCT_ORIG thrust::multiplies<hd_float>());*/
                            std::multiplies<hd_float>());
 
         return HD_NO_ERROR;

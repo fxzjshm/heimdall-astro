@@ -7,25 +7,23 @@
 
 #include "hd/merge_candidates.h"
 
-// see https://community.intel.com/t5/Intel-oneAPI-Threading-Building/tbb-task-has-not-been-declared/m-p/1255725#M14806
-#if defined(_GLIBCXX_RELEASE) && 9 <=_GLIBCXX_RELEASE && _GLIBCXX_RELEASE <= 10
-#define PSTL_USE_PARALLEL_POLICIES 0
-#define _GLIBCXX_USE_TBB_PAR_BACKEND 0
-#define _PSTL_PAR_BACKEND_SERIAL
+#if __has_include(<sycl/sycl.hpp>)
+#include <sycl/sycl.hpp>
+#else
+#include <CL/sycl.hpp>
 #endif
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
-
-#include <dpct/dpl_utils.hpp>
 #include "hd/utils.hpp"
+
+#include <boost/iterator/permutation_iterator.hpp>
+#include <boost/iterator/zip_iterator.hpp>
+#include <sycl/algorithm/iota.hpp>
+#include <sycl/algorithm/reduce_by_key.hpp>
+#include <ZipIterator.hpp>
 
 typedef std::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
 
 struct merge_candidates_functor {
-    /* DPCT_ORIG 	inline __host__ __device__*/
     inline candidate_tuple operator()(const candidate_tuple &c1,
                                       const candidate_tuple &c2) const {
         hd_float snr1 = std::get<0>(c1);
@@ -98,55 +96,32 @@ hd_error merge_candidates(hd_size count,
 
     // Sort by labels and remember permutation
     device_vector_wrapper<hd_size> d_permutation(count);
-    /* DPCT_ORIG 	thrust::sequence(d_permutation.begin(), d_permutation.end());*/
-    dpct::iota(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-               d_permutation.begin(), d_permutation.end());
-    /* DPCT_ORIG 	thrust::sort_by_key(labels_begin, labels_begin + count,*/
-    dpct::sort(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-               labels_begin, labels_begin + count, d_permutation.begin());
+    sycl::impl::iota(execution_policy,
+        d_permutation.begin(), d_permutation.end());
+    sycl::impl::sort_by_key(execution_policy,
+        labels_begin, labels_begin + count, d_permutation.begin(),
+        std::less());
 
     // Merge giants into groups according to the label
-    /* DPCT_ORIG 	reduce_by_key(labels_begin, labels_begin + count,*/
-    // oneapi::dpl::reduce_by_segment(
-    // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-    third_party::reduce_by_key(
+    sycl::impl::reduce_by_key(execution_policy,
         labels_begin, labels_begin + count,
-        /* DPCT_ORIG 	              make_permutation_iterator(*/
-        oneapi::dpl::make_permutation_iterator(
-            /* DPCT_ORIG
-                   make_zip_iterator(thrust::make_tuple(cand_peaks_begin,
-                                                                               cand_inds_begin,
-                                                                               cand_begins_begin,
-                                                                               cand_ends_begin,
-                                                                               cand_filter_inds_begin,
-                                                                               cand_dm_inds_begin,
-                                                                               cand_members_begin)),*/
-            oneapi::dpl::make_zip_iterator(cand_peaks_begin,
-                                           cand_inds_begin,
-                                           cand_begins_begin,
-                                           cand_ends_begin,
-                                           cand_filter_inds_begin,
-                                           cand_dm_inds_begin,
-                                           cand_members_begin),
+        permutation_iterator(
+            ZipIter(cand_peaks_begin,
+                    cand_inds_begin,
+                    cand_begins_begin,
+                    cand_ends_begin,
+                    cand_filter_inds_begin,
+                    cand_dm_inds_begin,
+                    cand_members_begin),
             d_permutation.begin()),
-        /* DPCT_ORIG 	              thrust::make_discard_iterator(),
-             */
-        oneapi::dpl::discard_iterator(), // keys output
-                                         /* DPCT_ORIG
-                                         make_zip_iterator(thrust::make_tuple(group_peaks_begin,
-                                                                                                 group_inds_begin,
-                                                                                                 group_begins_begin,
-                                                                                                 group_ends_begin,
-                                                                                                 group_filter_inds_begin,
-                                                                                                 group_dm_inds_begin,
-                                                                                                 group_members_begin)),*/
-        oneapi::dpl::make_zip_iterator(group_peaks_begin,
-                                       group_inds_begin,
-                                       group_begins_begin,
-                                       group_ends_begin,
-                                       group_filter_inds_begin,
-                                       group_dm_inds_begin,
-                                       group_members_begin),
+        labels_begin, // discard_iterator(), // keys output
+        ZipIter(group_peaks_begin,
+                group_inds_begin,
+                group_begins_begin,
+                group_ends_begin,
+                group_filter_inds_begin,
+                group_dm_inds_begin,
+                group_members_begin),
         std::equal_to<hd_size>(), merge_candidates_functor());
 
     return HD_NO_ERROR;

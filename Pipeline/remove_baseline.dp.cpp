@@ -5,16 +5,16 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
+#if __has_include(<sycl/sycl.hpp>)
+#include <sycl/sycl.hpp>
+#else
 #include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
+#endif
+
 #include "hd/remove_baseline.h"
 #include "hd/median_filter.h"
 //#include "hd/write_time_series.h"
 
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
-#include <dpct/dpl_utils.hpp>
 #include "hd/utils.hpp"
 #include <cmath>
 
@@ -46,7 +46,7 @@ public:
 	
 		// As we will use median-of-5, round to sample_count times a power of five
 		hd_size nscrunches  = (hd_size)(log(count/sample_count)/log(5.));
-        hd_size count_round = sycl::pow<double>(5., nscrunches) * sample_count;
+        hd_size count_round = std::pow<double>(5., nscrunches) * sample_count;
 
         buf1.resize(count_round);
 		buf2.resize(count_round/5);
@@ -82,13 +82,13 @@ public:
 		//write_device_time_series(baseline_ptr, count, 1.f, "thebaseline.tim");
 	
 		// Now we just subtract it off
-        std::transform(
-                    oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                    d_data_begin, d_data_begin + count, baseline.begin(),
-                    d_data_begin,
-                    std::minus<hd_float>());
+        sycl::impl::transform(
+            execution_policy,
+            d_data_begin, d_data_begin + count, baseline.begin(),
+            d_data_begin,
+            std::minus<hd_float>());
 
-                //write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
+        //write_device_time_series(d_data, count, 1.f, "post_baseline.tim");
 	
 		return HD_NO_ERROR;
 	}

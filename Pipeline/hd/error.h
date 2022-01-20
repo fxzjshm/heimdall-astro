@@ -39,7 +39,6 @@ const char* hd_get_error_string(hd_error error);
 
 hd_error throw_error(hd_error error);
 hd_error throw_dedisp_error(dedisp_error error);
-/* DPCT_ORIG hd_error throw_cuda_error(cudaError_t error);*/
 hd_error throw_cuda_error(int error);
 
 #ifdef __cplusplus

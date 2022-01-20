@@ -7,7 +7,12 @@
 
 #include <oneapi/dpl/execution>
 #include <oneapi/dpl/algorithm>
+#if __has_include(<sycl/sycl.hpp>)
+#include <sycl/sycl.hpp>
+#else
 #include <CL/sycl.hpp>
+#endif
+
 #include <dpct/dpct.hpp>
 
 #include <vector>

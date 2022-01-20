@@ -11,23 +11,15 @@
 
 #pragma once
 
-// see https://community.intel.com/t5/Intel-oneAPI-Threading-Building/tbb-task-has-not-been-declared/m-p/1255725#M14806
-#if defined(_GLIBCXX_RELEASE) && 9 <=_GLIBCXX_RELEASE && _GLIBCXX_RELEASE <= 10
-#define PSTL_USE_PARALLEL_POLICIES 0
-#define _GLIBCXX_USE_TBB_PAR_BACKEND 0
-#define _PSTL_PAR_BACKEND_SERIAL
+#if __has_include(<sycl/sycl.hpp>)
+#include <sycl/sycl.hpp>
+#else
+#include <CL/sycl.hpp>
 #endif
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
-#include <dpct/dpl_utils.hpp>
-/* DPCT_ORIG #include <thrust/iterator/transform_iterator.h>*/
-
-/* DPCT_ORIG #include <thrust/iterator/permutation_iterator.h>*/
-
-/* DPCT_ORIG #include <thrust/functional.h>*/
+#include <boost/iterator/counting_iterator.hpp>
+#include <boost/iterator/permutation_iterator.hpp>
+#include <boost/iterator/transform_iterator.hpp>
 
 // this example illustrates how to make strided access to a range of values
 // examples:
@@ -40,26 +32,13 @@
 template <typename Iterator>
 class strided_range {
 public:
-/* DPCT_ORIG     typedef typename thrust::iterator_difference<Iterator>::type
- * difference_type;*/
     typedef typename std::iterator_traits<Iterator>::difference_type
         difference_type;
-
-/* DPCT_ORIG     struct stride_functor : public
-   thrust::unary_function<difference_type,difference_type>
-    {*/
-    /*
-    DPCT1044:11: thrust::unary_function was removed because std::unary_function
-    has been deprecated in C++11. You may need to remove references to typedefs
-    from thrust::unary_function in the class definition.
-    */
     struct stride_functor {
         difference_type stride;
 
         stride_functor(difference_type stride)
             : stride(stride) {}
-
-/* DPCT_ORIG         __host__ __device__*/
 
         difference_type operator()(const difference_type& i) const
         { 
@@ -67,21 +46,9 @@ public:
         }
     };
 
-/* DPCT_ORIG     typedef typename thrust::counting_iterator<difference_type>
- * CountingIterator;*/
-    typedef typename oneapi::dpl::counting_iterator<difference_type>
-        CountingIterator;
-/* DPCT_ORIG     typedef typename thrust::transform_iterator<stride_functor,
- * CountingIterator> TransformIterator;*/
-    typedef typename oneapi::dpl::transform_iterator<CountingIterator,
-                                                     stride_functor>
-        TransformIterator;
-/* DPCT_ORIG     typedef typename
- * thrust::permutation_iterator<Iterator,TransformIterator>
- * PermutationIterator;*/
-    typedef
-        typename oneapi::dpl::permutation_iterator<Iterator, TransformIterator>
-            PermutationIterator;
+    typedef typename boost::iterators::counting_iterator<difference_type> CountingIterator;
+    typedef typename boost::iterators::transform_iterator<stride_functor, CountingIterator> TransformIterator;
+    typedef typename boost::iterators::permutation_iterator<Iterator, TransformIterator> PermutationIterator;
 
     // type of the strided_range iterator
     typedef PermutationIterator iterator;

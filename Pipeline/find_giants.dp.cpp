@@ -6,14 +6,26 @@
  ***************************************************************************/
 
 #include "hd/find_giants.h"
+
+#if __has_include(<sycl/sycl.hpp>)
+#include <sycl/sycl.hpp>
+#else
 #include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
-#include <oneapi/dpl/iterator>
+#endif
+
 #include "hd/utils.hpp"
 
 // TESTING only
 #include "hd/stopwatch.h"
+
 #include <iostream>
+#include <boost/tuple/tuple.hpp>
+#include <boost/iterator/counting_iterator.hpp>
+#include <boost/iterator/transform_iterator.hpp>
+#include <sycl/algorithm/copy_if.hpp>
+#include <sycl/algorithm/adjacent_difference.hpp>
+#include <sycl/algorithm/reduce_by_key.hpp>
+#include <ZipIterator.hpp>
 //#define PRINT_BENCHMARKS
 
 
@@ -23,10 +35,14 @@ template <typename T> struct greater_than_val {
   inline bool operator()(T x) const { return x > val; }
 };
 
-template <typename T> struct maximum_first {
+template <typename T>
+struct maximum_first {
   inline T operator()(T a, T b) const {
-    /* DPCT_ORIG     return thrust::get<0>(a) >= thrust::get<0>(b) ? a : b;*/
-    return std::get<0>(a) >= std::get<0>(b) ? a : b;
+    if constexpr (::is_tuple<T>::value) {
+      return std::get<0>(a) >= std::get<0>(b) ? a : b;
+    } else {
+      return a >= b ? a : b;
+    }
   }
 };
 
@@ -67,17 +83,13 @@ public:
     //   details of each giant into the d_giant_* arrays using
     //   reduce_by_key and some scatter operations.
 
-    using dpct::make_counting_iterator;
-    using oneapi::dpl::copy_if;
-    using oneapi::dpl::make_zip_iterator;
-
     typedef dpct::device_pointer<const hd_float> const_float_ptr;
     // typedef thrust::system::cuda::pointer<const hd_float> const_float_ptr;
     typedef dpct::device_pointer<hd_float> float_ptr;
     typedef dpct::device_pointer<hd_size> size_ptr;
 
-    const_float_ptr d_data_begin(d_data);
-    const_float_ptr d_data_end(d_data + count);
+    /*const_*/float_ptr d_data_begin(const_cast<hd_float*>(d_data));
+    /*const_*/float_ptr d_data_end(const_cast<hd_float*>(d_data) + count);
 
 #ifdef PRINT_BENCHMARKS
     Stopwatch timer;
@@ -92,9 +104,10 @@ public:
     // Quickly count how much giant data there is so we know the space needed
     /* DPCT_ORIG     hd_size giant_data_count =
      * thrust::count_if(thrust::retag<my_tag>(d_data_begin),*/
-    hd_size giant_data_count = std::count_if(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        d_data_begin, d_data_end, greater_than_val<hd_float>(thresh));
+    
+    // TODO: check this reduce
+    hd_size giant_data_count = sycl::impl::count_if(execution_policy,
+        d_data_begin, d_data_end, greater_than_val<hd_float>(thresh), std::plus());
     // std::cout << "GIANT_DATA_COUNT = " << giant_data_count << std::endl;
     // We can bail early if there are no giants at all
     if (0 == giant_data_count) {
@@ -103,7 +116,7 @@ public:
     }
 
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    dpct::get_default_queue().wait();
     timer.stop();
     std::cout << "count_if time:           " << timer.getTime() << " s"
               << std::endl;
@@ -116,7 +129,7 @@ public:
     d_giant_data_inds.resize(giant_data_count);
 
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    dpct::get_default_queue().wait();
     timer.stop();
     std::cout << "giant_data resize time:  " << timer.getTime() << " s"
               << std::endl;
@@ -126,35 +139,58 @@ public:
 
     timer.start();
 #endif
-
+    /*
+    hd_size giant_data_count2 = 
+      copy_if(make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
+                                           make_counting_iterator(0u))),
+              make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
+                                           make_counting_iterator(0u)))+count,
+              (d_data_begin), // the stencil
+              make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
+                                           thrust::retag<my_tag>(d_giant_data_inds.begin()))),
+              greater_than_val<hd_float>(thresh))
+      - make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
+                                     thrust::retag<my_tag>(d_giant_data_inds.begin())));
+    */
+    // tried serveral zip_iterators but not compatible with this algorithm implmention
+    // TODO: check this copy_if
+    
     hd_size giant_data_count2 =
-        /* DPCT_ORIG
-           copy_if(make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
-                                                   make_counting_iterator(0u))),*/
-        dpct::copy_if(
-            oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-            oneapi::dpl::make_zip_iterator(d_data_begin,
-                                           make_counting_iterator(0u)),
-            /* DPCT_ORIG
-               make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_data_begin),
-                                                       make_counting_iterator(0u)))+count,*/
-            oneapi::dpl::make_zip_iterator(d_data_begin,
-                                           make_counting_iterator(0u)) + count,
+        sycl::impl::copy_if(execution_policy,
+            d_data_begin,
+            d_data_begin + count,
             (d_data_begin), // the stencil
-                            /* DPCT_ORIG
-                               make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
-                                                                       thrust::retag<my_tag>(d_giant_data_inds.begin()))),*/
-            oneapi::dpl::make_zip_iterator(d_giant_data.begin(),
-                                           d_giant_data_inds.begin()),
+            d_giant_data.begin(),
             greater_than_val<hd_float>(thresh))
-        /* DPCT_ORIG       -
-           make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
-                                             thrust::retag<my_tag>(d_giant_data_inds.begin())));*/
-        - oneapi::dpl::make_zip_iterator(d_giant_data.begin(),
-                                         d_giant_data_inds.begin());
+        - d_giant_data.begin();
+    hd_size giant_data_count2_ =
+        sycl::impl::copy_if(execution_policy,
+            boost::iterators::make_counting_iterator(0u),
+            boost::iterators::make_counting_iterator(0u) + count,
+            (d_data_begin), // the stencil
+            d_giant_data_inds.begin(),
+            greater_than_val<hd_float>(thresh))
+        - d_giant_data_inds.begin();
+    assert(giant_data_count2 == giant_data_count2_);
+    
+    /* """
+    no known conversion from 'ZipIter<dpct::device_pointer<float>,
+    boost::iterators::counting_iterator<unsigned int, boost::use_default, boost::use_default>>::reference'
+    (aka 'ZipRef<float, const unsigned int>') to 'std::tuple<float, unsigned int>'
+       """ */
+    /*
+    hd_size giant_data_count2 = 
+      sycl::impl::copy_if(execution_policy,
+              ZipIter(d_data_begin, boost::iterators::make_counting_iterator(0u)),
+              ZipIter(d_data_begin, boost::iterators::make_counting_iterator(0u))+count,
+              (d_data_begin), // the stencil
+              ZipIter(d_giant_data.begin(), d_giant_data_inds.begin()),
+              greater_than_val<hd_float>(thresh))
+      - ZipIter(d_giant_data.begin(), d_giant_data_inds.begin());
+    */
 
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    dpct::get_default_queue().wait();
     timer.stop();
     std::cout << "giant_data copy_if time: " << timer.getTime() << " s"
               << std::endl;
@@ -166,16 +202,8 @@ public:
     // Create an array of head flags indicating candidate segments
     // thrust::device_vector<int> d_giant_data_segments(giant_data_count);
     d_giant_data_segments.resize(giant_data_count);
-    /*
-    DPCT1007:26: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
-    /*
-    DPCT1007:27: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
-    std::adjacent_difference(
-        // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+    sycl::impl::adjacent_difference(
+        execution_policy,
         d_giant_data_inds.begin(),
         d_giant_data_inds.end(),
         d_giant_data_segments.begin(), not_nearby<hd_size>(merge_dist));
@@ -194,19 +222,12 @@ public:
     // d_giant_data_seg_ids(d_giant_data_segments.size());
     d_giant_data_seg_ids.resize(d_giant_data_segments.size());
 
-    /*
-    DPCT1007:30: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
-    /*
-    DPCT1007:31: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
-    std::inclusive_scan(
-        // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+    sycl::impl::inclusive_scan(
+        execution_policy,
         d_giant_data_segments.begin(),
         d_giant_data_segments.end(),
-        d_giant_data_seg_ids.begin());
+        d_giant_data_seg_ids.begin(),
+        0, std::plus());
 
     // We extract the number of giants from the end of the exclusive scan
     // hd_size giant_count = d_giant_data_seg_ids.back() +
@@ -219,7 +240,7 @@ public:
     // total_giant_count = giant_count;
 
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    dpct::get_default_queue().wait();
     timer.stop();
     std::cout << "giant segments time:     " << timer.getTime() << " s"
               << std::endl;
@@ -240,7 +261,7 @@ public:
     size_ptr new_giant_ends_begin(&d_giant_ends[new_giants_offset]);
 
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    dpct::get_default_queue().wait();
     timer.stop();
     std::cout << "giants resize time:      " << timer.getTime() << " s"
               << std::endl;
@@ -250,38 +271,35 @@ public:
 #endif
 
     // Now we find the value (snr) and location (time) of each giant's maximum
+    /*
+    hd_size giant_count2 = 
+      reduce_by_key(thrust::retag<my_tag>(d_giant_data_inds.begin()), // the keys
+                    thrust::retag<my_tag>(d_giant_data_inds.end()),
+                    make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
+                                                 thrust::retag<my_tag>(d_giant_data_inds.begin()))),
+                    thrust::make_discard_iterator(), // the keys output
+                    make_zip_iterator(make_tuple(thrust::retag<my_tag>(new_giant_peaks_begin),
+                                                 thrust::retag<my_tag>(new_giant_inds_begin))),
+                    nearby<hd_size>(merge_dist),
+                    maximum_first<thrust::tuple<hd_float,hd_size> >())
+      .second - make_zip_iterator(make_tuple(thrust::retag<my_tag>(new_giant_peaks_begin),
+                                             thrust::retag<my_tag>(new_giant_inds_begin)));
+    */
     hd_size giant_count2 =
-        /* DPCT_ORIG
-           reduce_by_key(thrust::retag<my_tag>(d_giant_data_inds.begin()), */
-        // oneapi::dpl::reduce_by_key(
-        third_party::reduce_by_key(
-            // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        sycl::impl::reduce_by_key(
+            execution_policy,
             d_giant_data_inds.begin(), // the keys
             d_giant_data_inds.end(),
-            /* DPCT_ORIG
-               make_zip_iterator(make_tuple(thrust::retag<my_tag>(d_giant_data.begin()),
-                                                             thrust::retag<my_tag>(d_giant_data_inds.begin()))),*/
-            oneapi::dpl::make_zip_iterator(d_giant_data.begin(),
-                                           d_giant_data_inds.begin()),
-            /* DPCT_ORIG                     thrust::make_discard_iterator(), */
-            oneapi::dpl::discard_iterator(), // the keys output
-                                             /* DPCT_ORIG
-                                                make_zip_iterator(make_tuple(thrust::retag<my_tag>(new_giant_peaks_begin),
-                                                                                              thrust::retag<my_tag>(new_giant_inds_begin))),*/
-            oneapi::dpl::make_zip_iterator(new_giant_peaks_begin,
-                                           new_giant_inds_begin),
+            d_giant_data.begin(),
+            new_giant_inds_begin, // the keys output
+            new_giant_peaks_begin,
             nearby<hd_size>(merge_dist),
-            /* DPCT_ORIG maximum_first<thrust::tuple<hd_float,hd_size> >())*/
-            maximum_first<std::tuple<hd_float, hd_size>>())
-            /* DPCT_ORIG       .second -
-               make_zip_iterator(make_tuple(thrust::retag<my_tag>(new_giant_peaks_begin),
-                                                         thrust::retag<my_tag>(new_giant_inds_begin)));*/
+            maximum_first<hd_float>())
             .second -
-        oneapi::dpl::make_zip_iterator(new_giant_peaks_begin,
-                                       new_giant_inds_begin);
+        new_giant_peaks_begin;
 
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    dpct::get_default_queue().wait();
     timer.stop();
     std::cout << "reduce_by_key time:      " << timer.getTime() << " s"
               << std::endl;
@@ -296,26 +314,13 @@ public:
     }
 
     // Create arrays of the beginning and end indices of each giant
-    /*
-    DPCT1007:42: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
-    // std::scatter_if(
-    scatter_if(d_giant_data_inds.begin(), d_giant_data_inds.end(),
+    sycl::impl::scatter_if(execution_policy,
+               d_giant_data_inds.begin(), d_giant_data_inds.end(),
                d_giant_data_seg_ids.begin(), d_giant_data_segments.begin(),
                new_giant_begins_begin);
-    /* DPCT_ORIG
-     * thrust::scatter_if(make_transform_iterator(d_giant_data_inds.begin(),*/
-    /*
-    DPCT1007:43: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
-    // std::scatter_if(
-    scatter_if(
-        oneapi::dpl::make_transform_iterator(d_giant_data_inds.begin(),
-                                             plus_one<hd_size>()),
-        oneapi::dpl::make_transform_iterator(d_giant_data_inds.end() - 1,
-                                             plus_one<hd_size>()),
+    sycl::impl::scatter_if(execution_policy,
+        boost::iterators::make_transform_iterator(d_giant_data_inds.begin(), plus_one<hd_size>()),
+        boost::iterators::make_transform_iterator(d_giant_data_inds.end() - 1, plus_one<hd_size>()),
         d_giant_data_seg_ids.begin(), d_giant_data_segments.begin() + 1,
         new_giant_ends_begin);
 
@@ -324,7 +329,7 @@ public:
     }
 
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    dpct::get_default_queue().wait();
     timer.stop();
     std::cout << "begin/end copy_if time:  " << timer.getTime() << " s"
               << std::endl;

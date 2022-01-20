@@ -9,10 +9,6 @@
 #include "hd/strided_range.h"
 #include "hd/utils.hpp"
 
-/* DPCT_ORIG #include <thrust/device_vector.h>*/
-
-/* DPCT_ORIG #include <thrust/transform_scan.h>*/
-
 // TODO: Add error checking to the methods in here
 template <typename T> class MatchedFilterPlan_impl {
   device_vector_wrapper<T> m_scanned;
@@ -28,14 +24,9 @@ public:
 
     // Note: One extra element so that we include the final value
     m_scanned.resize(count + 1, 0);
-    /*
-    DPCT1007:10: Migration of this CUDA API is not supported by the
-    Intel(R) DPC++ Compatibility Tool.
-    */
-   // TODO check if this work
-    std::inclusive_scan(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        d_in_begin, d_in_end, m_scanned.begin() + 1);
+    // TODO check if this work
+    sycl::impl::inclusive_scan(execution_policy,
+        d_in_begin, d_in_end, m_scanned.begin() + 1, T(0), std::plus());
         // d_in, d_in + count, m_scanned.begin() + 1);
     return HD_NO_ERROR;
   }
@@ -67,12 +58,8 @@ public:
         m_scanned.begin() + offset - behind,
         m_scanned.begin() + offset - behind + out_count, stride);
 
-    /* DPCT_ORIG 		thrust::transform(in_range1.begin(),
-     * in_range1.end(),*/
-    std::transform(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+    sycl::impl::transform(execution_policy,
         in_range1.begin(), in_range1.end(), in_range2.begin(), d_out_begin,
-        /* DPCT_ORIG thrust::minus<T>());*/
         std::minus<T>());
 
     return HD_NO_ERROR;

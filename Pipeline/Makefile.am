@@ -12,6 +12,8 @@ AM_CPPFLAGS = -I$(top_srcdir) \
 	      -I$(top_srcdir)/Network \
 	      -I$(top_srcdir)/Formats \
 		  -I$(top_srcdir)/3rdparty/SYCL-PRNG/include \
+		  -I$(top_srcdir)/3rdparty/SyclParallelSTL/include \
+          -I$(top_srcdir)/3rdparty/ZipIterator \
 	      @DEDISP_CFLAGS@ $(BOOST_CPPFLAGS)
 
 include $(top_srcdir)/config/Makefile.targets
