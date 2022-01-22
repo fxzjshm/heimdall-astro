@@ -18,15 +18,16 @@
           'sorting networks'.
  */
 
-inline float median3(float a, float b, float c) {
-        return a < b ? b < c ? b
+inline 
+float median3(float a, float b, float c) {
+	return a < b ? b < c ? b
 	                      : a < c ? c : a
 	             : a < c ? a
 	                     : b < c ? c : b;
 }
-
-inline float median4(float a, float b, float c, float d) {
-        return a < c ? b < d ? a < b ? c < d ? 0.5f*(b+c) : 0.5f*(b+d)
+inline 
+float median4(float a, float b, float c, float d) {
+	return a < c ? b < d ? a < b ? c < d ? 0.5f*(b+c) : 0.5f*(b+d)
 	                             : c < d ? 0.5f*(a+c) : 0.5f*(a+d)
 	                     : a < d ? c < b ? 0.5f*(d+c) : 0.5f*(b+d)
 	                             : c < b ? 0.5f*(a+c) : 0.5f*(a+b)
@@ -35,9 +36,9 @@ inline float median4(float a, float b, float c, float d) {
 	                     : c < d ? a < b ? 0.5f*(d+a) : 0.5f*(b+d)
 	                             : a < b ? 0.5f*(a+c) : 0.5f*(c+b);
 }
-
-inline float median5(float a, float b, float c, float d, float e) {
-        // Note: This wicked code is by 'DRBlaise' and was found here:
+inline 
+float median5(float a, float b, float c, float d, float e) {
+	// Note: This wicked code is by 'DRBlaise' and was found here:
 	//         http://stackoverflow.com/a/2117018
 	return b < a ? d < c ? b < d ? a < e ? a < d ? e < d ? e : d
                                                  : c < a ? c : a
@@ -74,14 +75,13 @@ inline float median5(float a, float b, float c, float d, float e) {
 }
 
 struct median_filter3_kernel {
-    const hd_float* in;
+	const hd_float* in;
 	unsigned int    count;
 	median_filter3_kernel(const hd_float* in_,
 	                      unsigned int count_)
 		: in(in_), count(count_) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
-        inline hd_float operator()(unsigned int i) const {
-                // Note: We shrink the window near boundaries
+	inline hd_float operator()(unsigned int i) const {
+		// Note: We shrink the window near boundaries
 		if( i > 0 && i < count-1 ) {
 			return median3(in[i-1], in[i], in[i+1]);
 		}
@@ -95,14 +95,13 @@ struct median_filter3_kernel {
 };
 
 struct median_filter5_kernel {
-    const hd_float* in;
+	const hd_float* in;
 	unsigned int    count;
 	median_filter5_kernel(const hd_float* in_,
 	                      unsigned int count_)
 		: in(in_), count(count_) {}
-/* DPCT_ORIG 	inline __host__ __device__*/
-        inline hd_float operator()(unsigned int i) const {
-                // Note: We shrink the window near boundaries
+	inline hd_float operator()(unsigned int i) const {
+		// Note: We shrink the window near boundaries
 		if( i > 1 && i < count-2 ) {
 			return median5(in[i-2], in[i-1], in[i], in[i+1], in[i+2]);
 		}
@@ -122,12 +121,11 @@ struct median_filter5_kernel {
 };
 
 struct median_scrunch3_kernel {
-    const hd_float* in;
+	const hd_float* in;
 	median_scrunch3_kernel(const hd_float* in_)
 		: in(in_) {}
-
-    inline hd_float operator()(unsigned int i) const {
-        hd_float a = in[3*i+0];
+	inline hd_float operator()(unsigned int i) const {
+		hd_float a = in[3*i+0];
 		hd_float b = in[3*i+1];
 		hd_float c = in[3*i+2];
 		return median3(a, b, c);
@@ -135,12 +133,11 @@ struct median_scrunch3_kernel {
 };
 
 struct median_scrunch5_kernel {
-    const hd_float* in;
+	const hd_float* in;
 	median_scrunch5_kernel(const hd_float* in_)
 		: in(in_) {}
-
-        inline hd_float operator()(unsigned int i) const {
-                hd_float a = in[5*i+0];
+	inline hd_float operator()(unsigned int i) const {
+		hd_float a = in[5*i+0];
 		hd_float b = in[5*i+1];
 		hd_float c = in[5*i+2];
 		hd_float d = in[5*i+3];
@@ -150,13 +147,12 @@ struct median_scrunch5_kernel {
 };
 
 struct median_scrunch3_array_kernel {
-    const hd_float* in;
+	const hd_float* in;
 	const hd_size   size;
 	median_scrunch3_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
-
-        inline hd_float operator()(unsigned int i) const {
-                hd_size array = i / size;
+	inline hd_float operator()(unsigned int i) const {
+		hd_size array = i / size;
 		hd_size j     = i % size;
 		
 		hd_float a = in[(3*array+0)*size + j];
@@ -167,13 +163,12 @@ struct median_scrunch3_array_kernel {
 };
 
 struct median_scrunch5_array_kernel {
-    const hd_float* in;
+	const hd_float* in;
 	const hd_size   size;
 	median_scrunch5_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
-
-        inline hd_float operator()(unsigned int i) const {
-                hd_size array = i / size;
+	inline hd_float operator()(unsigned int i) const {
+		hd_size array = i / size;
 		hd_size j     = i % size;
 		
 		hd_float a = in[(5*array+0)*size + j];
@@ -189,45 +184,35 @@ hd_error median_filter3(const hd_float* d_in,
                         hd_size         count,
                         hd_float*       d_out)
 {
-
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
-        using dpct::make_counting_iterator;
-
-        std::transform(oneapi::dpl::execution::make_device_policy(
-                           dpct::get_default_queue()),
-                       dpct::make_counting_iterator<unsigned int>(0),
-                       dpct::make_counting_iterator<unsigned int>(count),
-                       d_out_begin, median_filter3_kernel(d_in, count));
-        return HD_NO_ERROR;
+	dpct::device_pointer<hd_float> d_out_begin(d_out);
+	std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      dpct::make_counting_iterator<unsigned int>(0),
+	                  dpct::make_counting_iterator<unsigned int>(count),
+	                  d_out_begin,
+	                  median_filter3_kernel(d_in, count));
+	return HD_NO_ERROR;
 }
 
 hd_error median_filter5(const hd_float* d_in,
                         hd_size         count,
                         hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
-        using dpct::make_counting_iterator;
-/* DPCT_ORIG 	thrust::transform(make_counting_iterator<unsigned int>(0),*/
-        std::transform(oneapi::dpl::execution::make_device_policy(
-                           dpct::get_default_queue()),
-                       dpct::make_counting_iterator<unsigned int>(0),
-                       /* DPCT_ORIG make_counting_iterator<unsigned
-                          int>(count),*/
-                       dpct::make_counting_iterator<unsigned int>(count),
-                       d_out_begin, median_filter5_kernel(d_in, count));
-        return HD_NO_ERROR;
+	dpct::device_pointer<hd_float> d_out_begin(d_out);
+	std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      dpct::make_counting_iterator<unsigned int>(0),
+	                  dpct::make_counting_iterator<unsigned int>(count),
+	                  d_out_begin,
+	                  median_filter5_kernel(d_in, count));
+	return HD_NO_ERROR;
 }
 
 hd_error median_scrunch3(const hd_float* d_in,
                          hd_size         count,
                          hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<const hd_float> d_in_begin(d_in);*/
-        dpct::device_pointer<const hd_float> d_in_begin(d_in);
-/* DPCT_ORIG 	thrust::device_ptr<hd_float>       d_out_begin(d_out);*/
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
-        if( count == 1 ) {
+	dpct::device_pointer<const hd_float> d_in_begin(d_in);
+	dpct::device_pointer<hd_float>       d_out_begin(d_out);
+	if( count == 1 ) {
 		*d_out_begin = d_in_begin[0];
 	}
 	else if( count == 2 ) {
@@ -236,18 +221,12 @@ hd_error median_scrunch3(const hd_float* d_in,
 	else {
 		// Note: Truncating here is necessary
 		hd_size out_count = count / 3;
-		using dpct::make_counting_iterator;
-/* DPCT_ORIG 		thrust::transform(make_counting_iterator<unsigned
- * int>(0),*/
-                std::transform(
-                    oneapi::dpl::execution::make_device_policy(
-                        dpct::get_default_queue()),
-                    dpct::make_counting_iterator<unsigned int>(0),
-                    /* DPCT_ORIG make_counting_iterator<unsigned
-                       int>(out_count),*/
-                    dpct::make_counting_iterator<unsigned int>(out_count),
-                    d_out_begin, median_scrunch3_kernel(d_in));
-        }
+		std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                          dpct::make_counting_iterator<unsigned int>(0),
+		                  dpct::make_counting_iterator<unsigned int>(out_count),
+		                  d_out_begin,
+		                  median_scrunch3_kernel(d_in));
+	}
 	return HD_NO_ERROR;
 }
 
@@ -255,10 +234,10 @@ hd_error median_scrunch5(const hd_float* d_in,
                          hd_size         count,
                          hd_float*       d_out)
 {
-    dpct::device_pointer<const hd_float> d_in_begin(d_in);
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
-
-    if( count == 1 ) {
+	dpct::device_pointer<const hd_float> d_in_begin(d_in);
+	dpct::device_pointer<hd_float>       d_out_begin(d_out);
+	
+	if( count == 1 ) {
 		*d_out_begin = d_in_begin[0];
 	}
 	else if( count == 2 ) {
@@ -278,13 +257,12 @@ hd_error median_scrunch5(const hd_float* d_in,
 	else {
 		// Note: Truncating here is necessary
 		hd_size out_count = count / 5;
-		using dpct::make_counting_iterator;
-        std::transform(
-                    oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                    dpct::make_counting_iterator<unsigned int>(0),
-                    dpct::make_counting_iterator<unsigned int>(out_count),
-                    d_out_begin, median_scrunch5_kernel(d_in));
-        }
+		std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                          dpct::make_counting_iterator<unsigned int>(0),
+		                  dpct::make_counting_iterator<unsigned int>(out_count),
+		                  d_out_begin,
+		                  median_scrunch5_kernel(d_in));
+	}
 	return HD_NO_ERROR;
 }
 
@@ -295,19 +273,16 @@ hd_error median_scrunch3_array(const hd_float* d_in,
                                hd_size         count,
                                hd_float*       d_out)
 {
-/* DPCT_ORIG 	thrust::device_ptr<hd_float> d_out_begin(d_out);*/
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
-        // Note: Truncating here is necessary
+	dpct::device_pointer<hd_float> d_out_begin(d_out);
+	// Note: Truncating here is necessary
 	hd_size out_count = count / 3;
 	hd_size total     = array_size * out_count;
-	using dpct::make_counting_iterator;
-        std::transform(oneapi::dpl::execution::make_device_policy(
-                           dpct::get_default_queue()),
-                       dpct::make_counting_iterator<unsigned int>(0),
-                       dpct::make_counting_iterator<unsigned int>(total),
-                       d_out_begin,
-                       median_scrunch3_array_kernel(d_in, array_size));
-        return HD_NO_ERROR;
+	std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      dpct::make_counting_iterator<unsigned int>(0),
+	                  dpct::make_counting_iterator<unsigned int>(total),
+	                  d_out_begin,
+	                  median_scrunch3_array_kernel(d_in, array_size));
+	return HD_NO_ERROR;
 }
 
 // Median-scrunches the corresponding elements from a collection of arrays
@@ -317,38 +292,32 @@ hd_error median_scrunch5_array(const hd_float* d_in,
                                hd_size         count,
                                hd_float*       d_out)
 {
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
-    // Note: Truncating here is necessary
+	dpct::device_pointer<hd_float> d_out_begin(d_out);
+	// Note: Truncating here is necessary
 	hd_size out_count = count / 5;
 	hd_size total     = array_size * out_count;
-	using dpct::make_counting_iterator;
-        std::transform(oneapi::dpl::execution::make_device_policy(
-                           dpct::get_default_queue()),
-                       dpct::make_counting_iterator<unsigned int>(0),
-                       dpct::make_counting_iterator<unsigned int>(total),
-                       d_out_begin,
-                       median_scrunch5_array_kernel(d_in, array_size));
-        return HD_NO_ERROR;
+	std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      dpct::make_counting_iterator<unsigned int>(0),
+	                  dpct::make_counting_iterator<unsigned int>(total),
+	                  d_out_begin,
+	                  median_scrunch5_array_kernel(d_in, array_size));
+	return HD_NO_ERROR;
 }
 
-template <typename T>
-/* DPCT_ORIG struct mean2_functor : public thrust::binary_function<T,T,T> {*/
-/*
-DPCT1044:55: thrust::binary_function was removed because std::binary_function
-has been deprecated in C++11. You may need to remove references to typedefs from
-thrust::binary_function in the class definition.
-*/
+template<typename T>
 struct mean2_functor {
-        inline T operator()(T a, T b) const { return (T)0.5 * (a + b); }
+	inline 
+	T operator()(T a, T b) const { return (T)0.5 * (a+b); }
 };
 
 struct mean_scrunch2_array_kernel {
-    const hd_float* in;
+	const hd_float* in;
 	const hd_size   size;
 	mean_scrunch2_array_kernel(const hd_float* in_, hd_size size_)
 		: in(in_), size(size_) {}
-    inline hd_float operator()(unsigned int i) const {
-                hd_size array = i / size;
+	inline 
+	hd_float operator()(unsigned int i) const {
+		hd_size array = i / size;
 		hd_size j     = i % size;
 		
 		hd_float a = in[(2*array+0)*size + j];
@@ -362,17 +331,12 @@ hd_error mean_filter2(const hd_float* d_in,
                       hd_size         count,
                       hd_float*       d_out)
 {
-        dpct::device_pointer<const hd_float> d_in_begin(d_in);
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
-        /*
-        DPCT1007:57: Migration of this CUDA API is not supported by the Intel(R)
-        DPC++ Compatibility Tool.
-        */
-        std::adjacent_difference(// oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                                 // d_in_begin, d_in_begin + count, d_out_begin,
-                                 d_in, d_in + count, d_out,
-                                 mean2_functor<hd_float>());
-        return HD_NO_ERROR;
+	dpct::device_pointer<const hd_float> d_in_begin(d_in);
+	dpct::device_pointer<hd_float>       d_out_begin(d_out);
+	oneapi::dpl::adjacent_difference(
+        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+        d_in_begin, d_in_begin+count, d_out_begin, mean2_functor<hd_float>());
+	return HD_NO_ERROR;
 }
 
 hd_error mean_scrunch2_array(const hd_float* d_in,
@@ -380,18 +344,16 @@ hd_error mean_scrunch2_array(const hd_float* d_in,
                              hd_size         count,
                              hd_float*       d_out)
 {
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
-    // Note: Truncating here is necessary
+	dpct::device_pointer<hd_float> d_out_begin(d_out);
+	// Note: Truncating here is necessary
 	hd_size out_count = count / 2;
 	hd_size total     = array_size * out_count;
-	using dpct::make_counting_iterator;
-    std::transform(oneapi::dpl::execution::make_device_policy(
-                           dpct::get_default_queue()),
-                       dpct::make_counting_iterator<unsigned int>(0),
-                       dpct::make_counting_iterator<unsigned int>(total),
-                       d_out_begin,
-                       mean_scrunch2_array_kernel(d_in, array_size));
-    return HD_NO_ERROR;
+	std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      dpct::make_counting_iterator<unsigned int>(0),
+	                  dpct::make_counting_iterator<unsigned int>(total),
+	                  d_out_begin,
+	                  mean_scrunch2_array_kernel(d_in, array_size));
+	return HD_NO_ERROR;
 }
 
 // suggested by Ewan Barr (2016 email)
@@ -417,13 +379,13 @@ struct linear_stretch_functor2 {
 };
 
 struct linear_stretch_functor {
-    const hd_float* in;
+	const hd_float* in;
 	hd_float        step;
 	linear_stretch_functor(const hd_float* in_,
 	                       hd_size in_count, hd_size out_count)
 		: in(in_), step(hd_float(in_count-1)/(out_count-1)) {}
-    inline hd_float operator()(unsigned int i) const {
-                hd_float     x = i * step;
+	inline hd_float operator()(unsigned int i) const {
+		hd_float     x = i * step;
 		unsigned int j = x;
 		return in[j] + ((x-j > 1e-5) ? (x-j)*(in[j+1]-in[j]) : 0.f);
 	}
@@ -434,20 +396,18 @@ hd_error linear_stretch(const hd_float* d_in,
                         hd_float*       d_out,
                         hd_size         out_count)
 {
-	using dpct::make_counting_iterator;
-        dpct::device_pointer<hd_float> d_out_begin(d_out);
+	dpct::device_pointer<hd_float> d_out_begin(d_out);
 
     // Ewan found this code to contain a bug, and suggested the latter
 	// thrust::transform(make_counting_iterator<unsigned int>(0),
 	//                   make_counting_iterator<unsigned int>(out_count),
 	//                   d_out_begin,
 	//                   linear_stretch_functor(d_in, in_count, out_count));
-    std::transform(
-            oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-            dpct::make_counting_iterator<unsigned int>(0),
-            dpct::make_counting_iterator<unsigned int>(out_count), d_out_begin,
-            linear_stretch_functor2(d_in, in_count,
-                                    hd_float(out_count - 1) / (in_count - 1)));
+	std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      dpct::make_counting_iterator<unsigned int>(0),
+	                  dpct::make_counting_iterator<unsigned int>(out_count),
+	                  d_out_begin,
+	                  linear_stretch_functor2(d_in, in_count, hd_float(out_count-1)/(in_count-1)));
 
-        return HD_NO_ERROR;
+	return HD_NO_ERROR;
 }

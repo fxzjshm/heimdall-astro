@@ -46,11 +46,7 @@ using std::endl;
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
-/* DPCT_ORIG   void stop_timer(Stopwatch& timer) { cudaDeviceSynchronize();
- * timer.stop(); }*/
-  void stop_timer(Stopwatch &timer) {
-   dpct::get_current_device().queues_wait_and_throw(); timer.stop();
-  }
+  void stop_timer(Stopwatch& timer) { dpct::get_current_device().queues_wait_and_throw(); timer.stop(); }
 #else
   void start_timer(Stopwatch& timer) { }
   void stop_timer(Stopwatch& timer) { }
@@ -105,32 +101,7 @@ hd_error allocate_gpu(const hd_params params) {
     cout << "Process " << proc_idx << " using GPU " << gpu_idx << endl;
   }
 
-  cerr << "yield_cpu is not supported yet in this implemention" << endl;
-  /*
-  int cerror;
-  if( !params.yield_cpu ) {
-    if( params.verbosity >= 2 ) {
-      cout << "\tProcess " << proc_idx << " setting CPU to spin" << endl;
-    }
-    cerror = cudaSetDeviceFlags(cudaDeviceScheduleSpin);
-    if( cerror != cudaSuccess ) {
-      return throw_cuda_error(cerror);
-    }
-  }
-  else {
-    if( params.verbosity >= 2 ) {
-      cout << "\tProcess " << proc_idx << " setting CPU to yield" << endl;
-    }
-    // Note: This Yield flag doesn't seem to work properly.
-    //   The BlockingSync flag does the job, although it may interfere
-    //     with GPU/CPU overlapping (not currently used).
-    //cerror = cudaSetDeviceFlags(cudaDeviceScheduleYield);
-    cerror = cudaSetDeviceFlags(cudaDeviceBlockingSync);
-    if( cerror != cudaSuccess ) {
-      return throw_cuda_error(cerror);
-    }
-  }
-  */
+  cerr << "yield_cpu is not supported in this implemention" << endl;
   
   return HD_NO_ERROR;
 }
@@ -140,7 +111,7 @@ unsigned int get_filter_index(unsigned int filter_width) {
   unsigned int v = filter_width;
   static const unsigned int b[] = {0xAAAAAAAA, 0xCCCCCCCC, 0xF0F0F0F0, 
                                    0xFF00FF00, 0xFFFF0000};
-  /* register */ unsigned int r = (v & b[0]) != 0;
+  unsigned int r = (v & b[0]) != 0;
   for( int i=4; i>0; --i) {
     r |= ((v & b[i]) != 0) << i;
   }
@@ -216,15 +187,6 @@ hd_error hd_create_pipeline(hd_pipeline* pipeline_, hd_params params) {
     cout << "\tInitialisation complete." << endl;
   }
   
-  /*
-  if( params.verbosity >= 1 ) {
-    cout << "Using Thrust v"
-         << THRUST_MAJOR_VERSION << "."
-         << THRUST_MINOR_VERSION << "."
-         << THRUST_SUBMINOR_VERSION << endl;
-  }
-  */
-
   return HD_NO_ERROR;
 }
 
@@ -303,10 +265,11 @@ hd_error hd_execute(hd_pipeline pl,
     return throw_error(error);
   }
 
-/* DPCT_ORIG   hd_size good_chan_count = thrust::reduce(h_killmask.begin(),*/
-  hd_size good_chan_count = std::reduce(
-      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-      h_killmask.begin(), h_killmask.end());
+  hd_size good_chan_count =
+    std::reduce(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+      h_killmask.begin(),
+      h_killmask.end()
+    );
   hd_size bad_chan_count = pl->params.nchans - good_chan_count;
   if( pl->params.verbosity >= 2 ) {
     cout << "Bad channel count = " << bad_chan_count << endl;
@@ -413,15 +376,15 @@ hd_error hd_execute(hd_pipeline pl,
   GiantFinder                 giant_finder;
 
   device_vector_wrapper<hd_float> d_giant_peaks;
-  device_vector_wrapper<hd_size> d_giant_inds;
-  device_vector_wrapper<hd_size> d_giant_begins;
-  device_vector_wrapper<hd_size> d_giant_ends;
-  device_vector_wrapper<hd_size> d_giant_filter_inds;
-  device_vector_wrapper<hd_size> d_giant_dm_inds;
-  device_vector_wrapper<hd_size> d_giant_members;
-
+  device_vector_wrapper<hd_size>  d_giant_inds;
+  device_vector_wrapper<hd_size>  d_giant_begins;
+  device_vector_wrapper<hd_size>  d_giant_ends;
+  device_vector_wrapper<hd_size>  d_giant_filter_inds;
+  device_vector_wrapper<hd_size>  d_giant_dm_inds;
+  device_vector_wrapper<hd_size>  d_giant_members;
+  
   typedef dpct::device_pointer<hd_float> dev_float_ptr;
-  typedef dpct::device_pointer<hd_size> dev_size_ptr;
+  typedef dpct::device_pointer<hd_size>  dev_size_ptr;
 
   if( pl->params.verbosity >= 2 ) {
     cout << "\tDedispersing for DMs " << dm_list[0]
@@ -482,36 +445,28 @@ hd_error hd_execute(hd_pipeline pl,
         
       cout << "\tBaselining and normalising each beam..." << endl;
     }
-
-/* DPCT_ORIG     hd_float* time_series =
- * thrust::raw_pointer_cast(&pl->d_time_series[0]);*/
-    hd_float *time_series = dpct::get_raw_pointer(&pl->d_time_series[0]);
-
+    
+    hd_float* time_series = dpct::get_raw_pointer(&pl->d_time_series[0]);
+    
     // Copy the time series to the device and convert to floats
     hd_size offset = dm_idx * series_stride * pl->params.dm_nbits/8;
     start_timer(copy_timer);
     switch( pl->params.dm_nbits ) {
     case 8:
-/* DPCT_ORIG       thrust::copy((unsigned char*)&pl->h_dm_series[offset],*/
-      std::copy(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                (unsigned char *)&pl->h_dm_series[offset],
-                (unsigned char *)&pl->h_dm_series[offset] + cur_nsamps,
-                pl->d_time_series.begin());
+      std::copy(oneapi::dpl::execution::seq, (unsigned char*)&pl->h_dm_series[offset],
+                   (unsigned char*)&pl->h_dm_series[offset] + cur_nsamps,
+                   pl->d_time_series.begin());
       break;
     case 16:
-/* DPCT_ORIG       thrust::copy((unsigned short*)&pl->h_dm_series[offset],*/
-      std::copy(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                (unsigned short *)&pl->h_dm_series[offset],
-                (unsigned short *)&pl->h_dm_series[offset] + cur_nsamps,
-                pl->d_time_series.begin());
+      std::copy(oneapi::dpl::execution::seq, (unsigned short*)&pl->h_dm_series[offset],
+                   (unsigned short*)&pl->h_dm_series[offset] + cur_nsamps,
+                   pl->d_time_series.begin());
       break;
     case 32:
       // Note: 32-bit implies float, not unsigned int
-/* DPCT_ORIG       thrust::copy((float*)&pl->h_dm_series[offset],*/
-      std::copy(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                (float *)&pl->h_dm_series[offset],
-                (float *)&pl->h_dm_series[offset] + cur_nsamps,
-                pl->d_time_series.begin());
+      std::copy(oneapi::dpl::execution::seq, (float*)&pl->h_dm_series[offset],
+                   (float*)&pl->h_dm_series[offset] + cur_nsamps,
+                   pl->d_time_series.begin());
       break;
     default:
       return HD_INVALID_NBITS;
@@ -544,17 +499,11 @@ hd_error hd_execute(hd_pipeline pl,
     // ---------
     start_timer(normalise_timer);
     hd_float rms = rms_getter.exec(time_series, cur_nsamps);
-/* DPCT_ORIG     thrust::transform(pl->d_time_series.begin(),
- * pl->d_time_series.end(),*/
-    std::transform(
-        // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        std::execution::par,
-        pl->d_time_series.begin(), pl->d_time_series.end(),
-        /* DPCT_ORIG thrust::make_constant_iterator(hd_float(1.0)/rms),*/
-        dpct::make_constant_iterator(hd_float(1.0) / rms),
-        pl->d_time_series.begin(),
-        /* DPCT_ORIG                       thrust::multiplies<hd_float>());*/
-        std::multiplies<hd_float>());
+    std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      pl->d_time_series.begin(), pl->d_time_series.end(),
+                      dpct::make_constant_iterator(hd_float(1.0)/rms),
+                      pl->d_time_series.begin(),
+                      std::multiplies<hd_float>());
     stop_timer(normalise_timer);
     
     if( beam == 0 && dm_idx == write_dm && first_idx == 0 ) {
@@ -579,11 +528,9 @@ hd_error hd_execute(hd_pipeline pl,
     matched_filter_plan.prep(time_series, cur_nsamps, rel_boxcar_max);
     stop_timer(filter_timer);
     // --------------------------
-
-/* DPCT_ORIG     hd_float* filtered_series =
- * thrust::raw_pointer_cast(&pl->d_filtered_series[0]);*/
-    hd_float *filtered_series = dpct::get_raw_pointer(&pl->d_filtered_series[0]);
-
+    
+    hd_float* filtered_series = dpct::get_raw_pointer(&pl->d_filtered_series[0]);
+    
     // Note: Filtering is done using a combination of tscrunching and
     //         'proper' boxcar convolution. The parameter min_tscrunch_width
     //         indicates how much of each to do. Raising min_tscrunch_width
@@ -603,15 +550,10 @@ hd_error hd_execute(hd_pipeline pl,
       }
       
       // Note: Filter width is relative to the current time resolution
-/* DPCT_ORIG       hd_size rel_min_tscrunch_width =
-   std::max(pl->params.min_tscrunch_width / cur_dm_scrunch, hd_size(1));*/
-      hd_size rel_min_tscrunch_width =
-          std::max(pl->params.min_tscrunch_width / cur_dm_scrunch, hd_size(1));
-/* DPCT_ORIG       hd_size rel_tscrunch_width = std::max(2 * rel_filter_width
-                                            / rel_min_tscrunch_width,
-                                            hd_size(1));*/
-      hd_size rel_tscrunch_width =
-          std::max(2 * rel_filter_width / rel_min_tscrunch_width, hd_size(1));
+      hd_size rel_min_tscrunch_width = std::max(pl->params.min_tscrunch_width
+                                                / cur_dm_scrunch, hd_size(1));
+      hd_size rel_tscrunch_width = std::max(2 * rel_filter_width
+                                            / rel_min_tscrunch_width, hd_size(1));
       // Filter width relative to cur_dm_scrunch AND tscrunch
       hd_size rel_rel_filter_width = rel_filter_width / rel_tscrunch_width;
 
@@ -635,39 +577,25 @@ hd_error hd_execute(hd_pipeline pl,
         // Note that this method reduces the S/N of injected pulses. For more information
         // see https://ui.adsabs.harvard.edu/abs/2021MNRAS.501.2316G/abstract [Appendix A]
         hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered);
-/* DPCT_ORIG thrust::transform(thrust::device_ptr<hd_float>(filtered_series),*/
-        std::transform(
-            // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-            std::execution::par,
-            dpct::device_pointer<hd_float>(filtered_series),
-            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series)*/
-            dpct::device_pointer<hd_float>(filtered_series) +
-                cur_nsamps_filtered,
-            /* DPCT_ORIG thrust::make_constant_iterator(hd_float(1.0)/rms),*/
-            dpct::make_constant_iterator(hd_float(1.0) / rms),
-            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series),*/
-            dpct::device_pointer<hd_float>(filtered_series),
-            /* DPCT_ORIG thrust::multiplies<hd_float>());*/
-            std::multiplies<hd_float>());
+        std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                          dpct::device_pointer<hd_float>(filtered_series),
+                          dpct::device_pointer<hd_float>(filtered_series) + cur_nsamps_filtered,
+                          dpct::make_constant_iterator(hd_float(1.0)/rms),
+                          dpct::device_pointer<hd_float>(filtered_series),
+                          std::multiplies<hd_float>());
       }
       else
       {
         // rescale the filtered time series (RMS ~ sqrt(time))
         dpct::constant_iterator<hd_float>
           norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
-/* DPCT_ORIG thrust::transform(thrust::device_ptr<hd_float>(filtered_series),*/
-        std::transform(
-            // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-            std::execution::par,
-            dpct::device_pointer<hd_float>(filtered_series),
-            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series)*/
-            dpct::device_pointer<hd_float>(filtered_series) +
-                cur_nsamps_filtered,
-            norm_val_iter,
-            /* DPCT_ORIG thrust::device_ptr<hd_float>(filtered_series),*/
-            dpct::device_pointer<hd_float>(filtered_series),
-            /* DPCT_ORIG thrust::multiplies<hd_float>());*/
-            std::multiplies<hd_float>());
+        std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                          dpct::device_pointer<hd_float>(filtered_series),
+                          dpct::device_pointer<hd_float>(filtered_series)
+                          + cur_nsamps_filtered,
+                          norm_val_iter,
+                          dpct::device_pointer<hd_float>(filtered_series),
+                          std::multiplies<hd_float>());
       }
 
       stop_timer(filter_timer);
@@ -708,34 +636,24 @@ hd_error hd_execute(hd_pipeline pl,
       
       hd_size rel_cur_filtered_offset = (cur_filtered_offset /
                                          rel_tscrunch_width);
-
-/* DPCT_ORIG       using namespace thrust::placeholders;*/
-
-/* DPCT_ORIG       thrust::transform(d_giant_inds.begin()+prev_giant_count,*/
-      std::transform(
-          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-          d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
-          d_giant_inds.begin() + prev_giant_count,
-          /*first_idx +*/ [=](auto _1) {
-                                                     return (_1 + rel_cur_filtered_offset) * cur_scrunch;
-          });
-/* DPCT_ORIG       thrust::transform(d_giant_begins.begin()+prev_giant_count,*/
-      std::transform(
-          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-          d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
-          d_giant_begins.begin() + prev_giant_count,
-          /*first_idx +*/ [=](auto _1) {
-                                                     return (_1 + rel_cur_filtered_offset) * cur_scrunch;
-          });
-/* DPCT_ORIG       thrust::transform(d_giant_ends.begin()+prev_giant_count,*/
-      std::transform(
-          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-          d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
-          d_giant_ends.begin() + prev_giant_count,
-          /*first_idx +*/ [=](auto _1) {
-                                                     return (_1 + rel_cur_filtered_offset) * cur_scrunch;
-          });
-
+      
+      
+      std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                        d_giant_inds.begin()+prev_giant_count,
+                        d_giant_inds.end(),
+                        d_giant_inds.begin()+prev_giant_count,
+                        /*first_idx +*/ [=](auto _1){return (_1+rel_cur_filtered_offset)*cur_scrunch;});
+      std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                        d_giant_begins.begin()+prev_giant_count,
+                        d_giant_begins.end(),
+                        d_giant_begins.begin()+prev_giant_count,
+                        /*first_idx +*/ [=](auto _1){return (_1+rel_cur_filtered_offset)*cur_scrunch;});
+      std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                        d_giant_ends.begin()+prev_giant_count,
+                        d_giant_ends.end(),
+                        d_giant_ends.begin()+prev_giant_count,
+                        /*first_idx +*/ [=](auto _1){return (_1+rel_cur_filtered_offset)*cur_scrunch;});
+      
       d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx);
       d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
       // Note: This could be used to track total member samples if desired
@@ -764,19 +682,19 @@ hd_error hd_execute(hd_pipeline pl,
   start_timer(candidates_timer);
 
   std::vector<hd_float> h_group_peaks;
-  std::vector<hd_size> h_group_inds;
-  std::vector<hd_size> h_group_begins;
-  std::vector<hd_size> h_group_ends;
-  std::vector<hd_size> h_group_filter_inds;
-  std::vector<hd_size> h_group_dm_inds;
-  std::vector<hd_size> h_group_members;
+  std::vector<hd_size>  h_group_inds;
+  std::vector<hd_size>  h_group_begins;
+  std::vector<hd_size>  h_group_ends;
+  std::vector<hd_size>  h_group_filter_inds;
+  std::vector<hd_size>  h_group_dm_inds;
+  std::vector<hd_size>  h_group_members;
   std::vector<hd_float> h_group_dms;
 
   //if (!too_many_giants)
   //{
     device_vector_wrapper<hd_size> d_giant_labels(giant_count);
-    hd_size *d_giant_labels_ptr = dpct::get_raw_pointer(&d_giant_labels[0]);
-
+    hd_size* d_giant_labels_ptr = dpct::get_raw_pointer(&d_giant_labels[0]);
+  
     RawCandidates d_giants;
     d_giants.peaks = dpct::get_raw_pointer(&d_giant_peaks[0]);
     d_giants.inds = dpct::get_raw_pointer(&d_giant_inds[0]);
@@ -785,7 +703,7 @@ hd_error hd_execute(hd_pipeline pl,
     d_giants.filter_inds = dpct::get_raw_pointer(&d_giant_filter_inds[0]);
     d_giants.dm_inds = dpct::get_raw_pointer(&d_giant_dm_inds[0]);
     d_giants.members = dpct::get_raw_pointer(&d_giant_members[0]);
-
+  
     hd_size filter_count = get_filter_index(pl->params.boxcar_max) + 1;
 
     if( pl->params.verbosity >= 2 ) {
@@ -810,17 +728,17 @@ hd_error hd_execute(hd_pipeline pl,
     if( pl->params.verbosity >= 2 ) {
       cout << "Candidate count = " << group_count << endl;
     }
-
+  
     device_vector_wrapper<hd_float> d_group_peaks(group_count);
-    device_vector_wrapper<hd_size> d_group_inds(group_count);
-    device_vector_wrapper<hd_size> d_group_begins(group_count);
-    device_vector_wrapper<hd_size> d_group_ends(group_count);
-    device_vector_wrapper<hd_size> d_group_filter_inds(group_count);
-    device_vector_wrapper<hd_size> d_group_dm_inds(group_count);
-    device_vector_wrapper<hd_size> d_group_members(group_count);
-
+    device_vector_wrapper<hd_size>  d_group_inds(group_count);
+    device_vector_wrapper<hd_size>  d_group_begins(group_count);
+    device_vector_wrapper<hd_size>  d_group_ends(group_count);
+    device_vector_wrapper<hd_size>  d_group_filter_inds(group_count);
+    device_vector_wrapper<hd_size>  d_group_dm_inds(group_count);
+    device_vector_wrapper<hd_size>  d_group_members(group_count);
+  
     device_vector_wrapper<hd_float> d_group_dms(group_count);
-
+  
     RawCandidates d_groups;
     d_groups.peaks = dpct::get_raw_pointer(&d_group_peaks[0]);
     d_groups.inds = dpct::get_raw_pointer(&d_group_inds[0]);
@@ -829,24 +747,16 @@ hd_error hd_execute(hd_pipeline pl,
     d_groups.filter_inds = dpct::get_raw_pointer(&d_group_filter_inds[0]);
     d_groups.dm_inds = dpct::get_raw_pointer(&d_group_dm_inds[0]);
     d_groups.members = dpct::get_raw_pointer(&d_group_members[0]);
-
+  
     merge_candidates(giant_count,
                      d_giant_labels_ptr,
                      *const_d_giants,
                      d_groups);
   
     // Look up the actual DM of each group
-    device_vector_wrapper<hd_float> d_dm_list(dm_list, dm_list + dm_count);
-    /*
-    DPCT1007:6: Migration of this CUDA API is not supported by the Intel(R)
-    DPC++ Compatibility Tool.
-    */
-    gather( // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                d_group_dm_inds.begin(), d_group_dm_inds.end(),
-                d_dm_list.begin(), d_group_dms.begin());
-                // dpct::get_raw_pointer(d_group_dm_inds.begin()), dpct::get_raw_pointer(d_group_dm_inds.end()),
-                // dpct::get_raw_pointer(d_dm_list.begin()), dpct::get_raw_pointer(d_group_dms.begin()));
-
+    device_vector_wrapper<hd_float> d_dm_list(dm_list, dm_list+dm_count);
+    dpct::gather(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()), d_group_dm_inds.begin(), d_group_dm_inds.end(), d_dm_list.begin(), d_group_dms.begin());
+  
     // Device to host transfer of candidates
     // h_group_peaks = d_group_peaks;
     oneapi_copy(d_group_peaks, h_group_peaks);
@@ -965,7 +875,7 @@ hd_error hd_execute(hd_pipeline pl,
   stop_timer(candidates_timer);
   
   stop_timer(total_timer);
-
+  
 #ifdef HD_BENCHMARK
   if( pl->params.verbosity >= 1 )
   {

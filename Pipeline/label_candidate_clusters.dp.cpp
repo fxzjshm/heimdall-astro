@@ -88,7 +88,7 @@ struct range_min_functor : public thrust::binary_function<void,void,ValueType> {
 	}
 };
 */
-/* DPCT_ORIG __device__ unsigned int d_counter;*/
+
 // dpct::global_memory<unsigned int, 0> d_counter;
 // TODO: check if this can work
 unsigned int d_counter;
@@ -101,9 +101,9 @@ template<typename T>
 struct trace_equivalency_chain {
 	T* new_labels;
 	trace_equivalency_chain(T* new_labels_) : new_labels(new_labels_) {}
-    inline /*__host__*/
-    void operator()(unsigned int old_label/*, unsigned int *d_counter*/) const {
-        T cur_label = old_label;
+	inline /*__host__*/
+	void operator()(unsigned int old_label) const {
+		T cur_label = old_label;
 		while( new_labels[cur_label] != cur_label ) {
 			cur_label = new_labels[cur_label];
 			//new_labels[old_label] = cur_label;
@@ -111,11 +111,8 @@ struct trace_equivalency_chain {
 			//                 new_labels[old_label] each iteration vs.
 			//                 only at the end (see commented line below).
 			//               It appears to make only 10-20% difference
-/* DPCT_ORIG 			atomicAdd(&d_counter, 1);*/
-                        sycl::atomic<unsigned int>(
-                            sycl::global_ptr<unsigned int>(&d_counter))
-                            .fetch_add(1);
-                }
+			sycl::atomic<unsigned int>(sycl::global_ptr<unsigned int>(&d_counter)).fetch_add(1);
+		}
 		new_labels[old_label] = cur_label;
 		
 		/*
@@ -164,9 +161,9 @@ struct cluster_functor {
 		  d_filters(d_filters_), d_dms(d_dms_),
 		  d_labels(d_labels_),
 		  time_tol(time_tol_), filter_tol(filter_tol_), dm_tol(dm_tol_) {}
-
-    inline void operator()(unsigned int i) const {
-        hd_size samp_i   = d_samp_inds[i];
+	
+	inline void operator()(unsigned int i) const {
+		hd_size samp_i   = d_samp_inds[i];
 		hd_size begin_i  = d_begins[i];
 		hd_size end_i    = d_ends[i];
 		hd_size filter_i = d_filters[i];
@@ -188,10 +185,8 @@ struct cluster_functor {
 			                   dm_i, dm_j,
 			                   time_tol, filter_tol, dm_tol) ) {
 				// Re-label as the minimum of the two
-/* DPCT_ORIG 				d_labels[i] = min((int)d_labels[i],
- * (int)d_labels[j]);*/
-                                d_labels[i] = sycl::min((int)d_labels[i], (int)d_labels[j]);
-                        }
+				d_labels[i] = sycl::min((int)d_labels[i], (int)d_labels[j]);
+			}
 		}
 	}
 };
@@ -223,25 +218,27 @@ hd_error label_candidate_clusters(hd_size            count,
 	              within_range(ci.begin,ci.end,cj.begin,cj.end,time_tol) ):
 	              ci.new_label = min(ci.new_label, cj.new_label);
 	 */
-
-    dpct::device_pointer<hd_size> d_labels_begin(d_labels);
-    dpct::iota(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                   d_labels_begin, d_labels_begin + count);
-
-    // This just does a brute-force O(N^2) search for neighbours and
+	
+	dpct::device_pointer<hd_size> d_labels_begin(d_labels);
+	dpct::iota(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+               d_labels_begin, d_labels_begin+count);
+	
+	// This just does a brute-force O(N^2) search for neighbours and
 	//   re-labels as the minimum label over neighbours.
-/* DPCT_ORIG 	thrust::for_each(make_counting_iterator<unsigned int>(0),*/
-        std::for_each(oneapi::dpl::execution::make_device_policy(
-                          dpct::get_default_queue()),
-                      dpct::make_counting_iterator<unsigned int>(0),
-                      /* DPCT_ORIG make_counting_iterator<unsigned
-                         int>(count),*/
-                      dpct::make_counting_iterator<unsigned int>(count),
-                      cluster_functor(count, d_cands.inds, d_cands.begins,
-                                      d_cands.ends, d_cands.filter_inds,
-                                      d_cands.dm_inds, d_labels, time_tol,
-                                      filter_tol, dm_tol));
-    /*
+	std::for_each(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                  dpct::make_counting_iterator<unsigned int>(0),
+	              dpct::make_counting_iterator<unsigned int>(count),
+	              cluster_functor(count,
+	                              d_cands.inds,
+	                              d_cands.begins,
+	                              d_cands.ends,
+	                              d_cands.filter_inds,
+	                              d_cands.dm_inds,
+	                              d_labels,
+	                              time_tol,
+	                              filter_tol,
+	                              dm_tol));
+	/*
 	using thrust::make_transform_iterator;
 	using thrust::make_zip_iterator;
 	using thrust::make_counting_iterator;
@@ -362,35 +359,29 @@ hd_error label_candidate_clusters(hd_size            count,
 	//         in overall speed.
 
 	unsigned int* d_counter_address=&d_counter;
-/* DPCT_ORIG 	cudaGetSymbolAddress((void**)&d_counter_address, d_counter);*/
-        // *((void **)&d_counter_address) = d_counter.get_ptr();
-        dpct::device_pointer<unsigned int> d_counter_ptr(d_counter_address);
-        *d_counter_ptr = 0;
-
-        std::for_each(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                      dpct::make_counting_iterator<unsigned int>(0),
-                      dpct::make_counting_iterator<unsigned int>(count),
-                      trace_equivalency_chain<hd_size>(d_labels));
-
-        //std::cout << "Total chain iterations: " << *d_counter_ptr << std::endl;
+    dpct::device_pointer<unsigned int> d_counter_ptr(d_counter_address);
+    *d_counter_ptr = 0;
+  
+	std::for_each(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                     dpct::make_counting_iterator<unsigned int>(0),
+	                 dpct::make_counting_iterator<unsigned int>(count),
+	                 trace_equivalency_chain<hd_size>(d_labels));
+	
+	//std::cout << "Total chain iterations: " << *d_counter_ptr << std::endl;
 	
 	// Finally we do a quick count of the number of unique labels
 	//   This is efficiently achieved by checking where new labels are
 	//     unchanged from their original values (i.e., where d_labels[i] == i)
-        device_vector_wrapper<int> d_label_roots;
-        d_label_roots.resize(count);
-        std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-                       d_labels_begin, d_labels_begin + count,
-                       /* DPCT_ORIG make_counting_iterator<hd_size>(0),*/
-                       dpct::make_counting_iterator<hd_size>(0),
-                       d_label_roots.begin(), std::equal_to<hd_size>());
-/* DPCT_ORIG 	*label_count = thrust::count_if(d_label_roots.begin(),*/
-        *label_count =
-            std::count_if(oneapi::dpl::execution::make_device_policy(
-                              dpct::get_default_queue()),
-                          d_label_roots.begin(), d_label_roots.end(),
-                          /* DPCT_ORIG thrust::identity<hd_size>());*/
-                          oneapi::dpl::identity());
-
-        return HD_NO_ERROR;
+	device_vector_wrapper<int> d_label_roots(count);
+	std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                      d_labels_begin, d_labels_begin+count,
+	                  dpct::make_counting_iterator<hd_size>(0),
+	                  d_label_roots.begin(),
+	                  oneapi::dpl::equal_to<hd_size>());
+	*label_count = std::count_if(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
+                                    d_label_roots.begin(),
+	                                d_label_roots.end(),
+	                                oneapi::dpl::identity());
+	
+	return HD_NO_ERROR;
 }

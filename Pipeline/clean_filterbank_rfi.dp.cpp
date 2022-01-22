@@ -43,7 +43,6 @@ template <typename T>
 struct abs_less_than {
   T thresh;
   abs_less_than(T thresh_) : thresh(thresh_) {}
-/* DPCT_ORIG   inline __host__ __device__*/
   inline bool operator()(T x) const {
     return fabs(x) < thresh;
   }
@@ -207,37 +206,36 @@ hd_error zap_filterbank_rfi(const int* h_mask, const hd_byte* h_in,
   // TODO: Tidy this up. Could possibly pass device arrays rather than host.
   
   // Copy filterbank data to the device
-  device_vector_wrapper<WordType> d_in((WordType *)h_in,
-                                     (WordType *)h_in + nsamps * stride);
-  device_vector_wrapper<WordType> d_out(nsamps * stride);
-  device_vector_wrapper<int> d_mask(h_mask, h_mask + nsamps);
-  WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
-  int *d_mask_ptr = dpct::get_raw_pointer(&d_mask[0]);
-  std::transform(
-      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-      oneapi::dpl::counting_iterator<unsigned int>(0),
-      oneapi::dpl::counting_iterator<unsigned int>(nsamps * stride),
-      d_out.begin(),
-      zap_fb_rfi_functor<WordType>(d_mask_ptr, d_in_ptr, stride, nbits, nsamps,
-                                   max_resample_dist));
+  device_vector_wrapper<WordType> d_in((WordType*)h_in,
+                                       (WordType*)h_in + nsamps*stride);
+  device_vector_wrapper<WordType> d_out(nsamps*stride);
+  device_vector_wrapper<int>      d_mask(h_mask, h_mask+nsamps);
+  WordType* d_in_ptr   = dpct::get_raw_pointer(&d_in[0]);
+  int*      d_mask_ptr = dpct::get_raw_pointer(&d_mask[0]);
+  std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()), oneapi::dpl::counting_iterator<unsigned int>(0),
+                    oneapi::dpl::counting_iterator<unsigned int>(nsamps*stride),
+                    d_out.begin(),
+                    zap_fb_rfi_functor<WordType>(d_mask_ptr, d_in_ptr,
+                                                 stride, nbits,
+                                                 nsamps, max_resample_dist));
   // Copy back to the host
-  std::copy(
-      oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-      d_out.begin(), d_out.end(), (WordType *)h_out);
-
+  std::copy(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()), d_out.begin(), d_out.end(),
+               (WordType*)h_out);
+  
   return HD_NO_ERROR;
 }
 
-template <typename T>
+template<typename T>
 struct is_rfi {
   T thresh;
   is_rfi(T thresh_) : thresh(thresh_) {}
-  inline bool operator()(T x) const {
+  inline 
+  bool operator()(T x) const {
     return fabs(x) > thresh;
   }
 };
 
-template <typename T>
+template<typename T>
 struct rfi_mask_functor {
   T thresh;
   rfi_mask_functor(T thresh_) : thresh(thresh_) {}
@@ -270,26 +268,26 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   device_vector_wrapper<hd_float> d_filtered;
   //thrust::host_vector<hd_float>   h_beams_series;
   //thrust::device_vector<hd_float> d_beams_series;
-  device_vector_wrapper<int> d_filtered_rfi_mask;
-  device_vector_wrapper<int> d_rfi_mask;
-  std::vector<int> h_rfi_mask;
-
+  device_vector_wrapper<int>      d_filtered_rfi_mask;
+  device_vector_wrapper<int>      d_rfi_mask;
+  std::vector<int>        h_rfi_mask;
+  
   hd_size nchans = dedisp_get_channel_count(main_plan);
   
   // TODO: Any way to avoid having to use this?
   std::vector<hd_byte> h_in_copy;
-
+  
   typedef unsigned int WordType;
   hd_size stride = nchans * nbits/8 / sizeof(WordType);
   
   // TODO: Any way to avoid having to use this?
-  device_vector_wrapper<WordType> d_in((WordType *)h_in,
-                                     (WordType *)h_in + nsamps * stride);
-  WordType *d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
-
+  device_vector_wrapper<WordType> d_in((WordType*)h_in,
+                                       (WordType*)h_in + nsamps*stride);
+  WordType* d_in_ptr = dpct::get_raw_pointer(&d_in[0]);
+  
   device_vector_wrapper<hd_float> d_bandpass(nchans);
-  hd_float *d_bandpass_ptr = dpct::get_raw_pointer(&d_bandpass[0]);
-
+  hd_float* d_bandpass_ptr = dpct::get_raw_pointer(&d_bandpass[0]);
+  
   // Narrow-band RFI is not an issue when nbits is small
   // Note: Small nbits can actually cause this excision code to fail
   if ( nbits > 4 && rfi_narrow ) {
@@ -330,7 +328,7 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     h_in_copy.resize(nsamps*stride*sizeof(WordType));
     std::copy(
         oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        d_in.begin(), d_in.end(), (WordType *)&h_in_copy[0]);
+        d_in.begin(), d_in.end(), (WordType*)&h_in_copy[0]);
   }
   else {
     h_in_copy.assign(h_in, h_in+nsamps*nchans*nbits/8);
@@ -386,8 +384,8 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     d_series = h_raw_series;
     // Remove the baseline
     hd_size nsamps_smooth = hd_size(baseline_length / (2 * dt));
-    hd_float *d_series_ptr = dpct::get_raw_pointer(&d_series[0]);
-
+    hd_float* d_series_ptr = dpct::get_raw_pointer(&d_series[0]);
+    
     //write_device_time_series(d_series_ptr, nsamps_computed,
     //                         dt, "dm0_dedispersed.tim");
     
@@ -415,20 +413,18 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
     d_rfi_mask.resize(nsamps_computed, 0);
     
     d_filtered_rfi_mask.resize(nsamps_computed, 0);
-    int *d_filtered_rfi_mask_ptr =
-        /* DPCT_ORIG       thrust::raw_pointer_cast(&d_filtered_rfi_mask[0]);*/
-        dpct::get_raw_pointer(&d_filtered_rfi_mask[0]);
-
+    int* d_filtered_rfi_mask_ptr =
+      dpct::get_raw_pointer(&d_filtered_rfi_mask[0]);
+    
     // Create an RFI mask for this filter
-    std::transform(
-        oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-        d_series.begin(), d_series.end(), d_rfi_mask.begin(),
-        is_rfi<hd_float>(rfi_tol));
-
+    std::transform(oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()), d_series.begin(), d_series.end(),
+                      d_rfi_mask.begin(),
+                      is_rfi<hd_float>(rfi_tol));
+    
     // Note: The filtered output is shorter by boxcar_max samps
     //         and offset by boxcar_max/2 samps.
     d_filtered.resize(nsamps_computed + 1 - boxcar_max);
-    hd_float *d_filtered_ptr = dpct::get_raw_pointer(&d_filtered[0]);
+    hd_float* d_filtered_ptr = dpct::get_raw_pointer(&d_filtered[0]);
     MatchedFilterPlan<hd_float> filter_plan;
     filter_plan.prep(d_series_ptr, nsamps_computed, boxcar_max);
     
@@ -441,11 +437,10 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
       filter_plan.exec(d_filtered_ptr, filter_width);
       
       // Normalise the filtered time series (RMS ~ sqrt(time))
-      third_party::counting_iterator<hd_float> 
+      dpct::constant_iterator<hd_float> 
         norm_val_iter(1.0 / sqrt((hd_float)filter_width));
       std::transform(
-          // oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
-          std::execution::par,
+          oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
           d_filtered.begin(), d_filtered.end(), norm_val_iter,
           d_filtered.begin(),
           std::multiplies<hd_float>());
@@ -473,7 +468,6 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
           oneapi::dpl::execution::make_device_policy(dpct::get_default_queue()),
           d_rfi_mask.begin(), d_rfi_mask.end(), d_filtered_rfi_mask.begin(),
           d_rfi_mask.begin(),
-          /* DPCT_ORIG                         thrust::logical_or<int>());*/
           std::logical_or<int>());
     }
     // h_rfi_mask = d_rfi_mask;
@@ -495,9 +489,9 @@ hd_error clean_filterbank_rfi(dedisp_plan    main_plan,
   }
   else
   {
-/* DPCT_ORIG     thrust::copy(&h_in_copy[0],*/
     std::copy(oneapi::dpl::execution::seq, &h_in_copy[0],
-              &h_in_copy[0] + nsamps * nchans * nbits / 8, h_out);
+                 &h_in_copy[0] + nsamps*nchans*nbits/8,
+                 h_out);
   }
     
   return HD_NO_ERROR;

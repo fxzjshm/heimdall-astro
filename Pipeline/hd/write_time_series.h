@@ -5,11 +5,6 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#include <CL/sycl.hpp>
-#include <dpct/dpct.hpp>
-
 #include <vector>
 #include <string>
 using std::string;
