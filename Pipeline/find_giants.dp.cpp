@@ -190,14 +190,6 @@ public:
     // NOTICE: zip_iterator seems to be not writeable in Boost.Compute's implemention,
     //         so should split this into two function calls
     hd_size giant_data_count2 =
-        copy_if(d_data_begin,
-                d_data_begin + count,
-                (d_data_begin), // the stencil
-                d_giant_data.begin(),
-                greater_than_val<hd_float>(thresh)(),
-                queue)
-        - d_giant_data.begin();
-    hd_size giant_data_count2_ =
         copy_if(make_counting_iterator((hd_size)0),
                 make_counting_iterator((hd_size)0) + count,
                 (d_data_begin), // the stencil
@@ -205,7 +197,12 @@ public:
                 greater_than_val<hd_float>(thresh)(),
                 queue)
         - d_giant_data_inds.begin();
-    assert(giant_data_count2 == giant_data_count2_);
+    boost::compute::copy(
+        boost::compute::make_permutation_iterator(d_data_begin, d_giant_data_inds.begin()),
+        boost::compute::make_permutation_iterator(d_data_begin, d_giant_data_inds.begin()) + giant_data_count2,
+        d_giant_data.begin(),
+        queue
+    );
     //write_vector(d_giant_data, "find_giants.d_giant_data");
     //write_vector(d_giant_data_inds, "find_giants.d_giant_data_inds");
     
