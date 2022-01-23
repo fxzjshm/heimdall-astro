@@ -1,5 +1,5 @@
 
-INCLUDES = -I$(top_srcdir)/src
+#INCLUDES = -I$(top_srcdir)/src
 
 lib_LTLIBRARIES = libhdnetwork.la
 
