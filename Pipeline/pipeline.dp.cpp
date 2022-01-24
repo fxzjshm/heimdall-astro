@@ -793,7 +793,7 @@ hd_error hd_execute(hd_pipeline pl,
     return HD_NO_ERROR;
   };
   // wait for the first one to generate kernel cache
-  if (dm_idx != 0) {
+  if (dm_idx == 0) {
     inner_function();
   } else {
     thread_pool.enqueue(inner_function);
