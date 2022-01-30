@@ -9,3 +9,4 @@ include_HEADERS = hd/ClientSocket.h hd/ServerSocket.h
 
 include $(top_srcdir)/config/Makefile.targets
 
+AM_LDFLAGS = -lstdc++ -lm

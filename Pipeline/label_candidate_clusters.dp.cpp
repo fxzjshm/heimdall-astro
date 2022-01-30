@@ -107,7 +107,7 @@ struct trace_equivalency_chain {
 	T* new_labels;
 	trace_equivalency_chain(T* new_labels_) : new_labels(new_labels_) {}
     inline /*__host__*/
-    void operator()(unsigned int old_label/*, unsigned int *d_counter*/) const {
+    void operator()(unsigned int old_label) const {
         T cur_label = old_label;
 		while( new_labels[cur_label] != cur_label ) {
 			cur_label = new_labels[cur_label];
@@ -190,7 +190,7 @@ struct cluster_functor {
 			                   dm_i, dm_j,
 			                   time_tol, filter_tol, dm_tol) ) {
 				// Re-label as the minimum of the two
-                d_labels[i] = std::min((int)d_labels[i], (int)d_labels[j]);
+                d_labels[i] = std::min(d_labels[i], d_labels[j]);
             }
 		}
 	}
@@ -373,8 +373,7 @@ hd_error label_candidate_clusters(hd_size            count,
 	// Finally we do a quick count of the number of unique labels
 	//   This is efficiently achieved by checking where new labels are
 	//     unchanged from their original values (i.e., where d_labels[i] == i)
-    device_vector_wrapper<int> d_label_roots;
-    d_label_roots.resize(count);
+    device_vector_wrapper<int> d_label_roots(count);
     sycl::impl::transform(execution_policy,
                    d_labels_begin, d_labels_begin + count,
                    boost::iterators::make_counting_iterator<hd_size>(0),

@@ -254,6 +254,8 @@ hd_error hd_execute(hd_pipeline pl,
   Stopwatch candidates_timer;
   
   start_timer(total_timer);
+
+  execution_policy = sycl::sycl_execution_policy(dpct::get_default_queue());
   
   start_timer(clean_timer);
   // Note: Filterbank cleaning must be done out-of-place
@@ -311,9 +313,7 @@ hd_error hd_execute(hd_pipeline pl,
   }
 
   
-  hd_size good_chan_count = sycl::impl::reduce(
-      execution_policy,
-      h_killmask.begin(), h_killmask.end(), int(0), std::plus());
+  hd_size good_chan_count = std::reduce(h_killmask.begin(), h_killmask.end());
   hd_size bad_chan_count = pl->params.nchans - good_chan_count;
   if( pl->params.verbosity >= 2 ) {
     cout << "Bad channel count = " << bad_chan_count << endl;
