@@ -683,36 +683,40 @@ hd_error hd_execute(hd_pipeline pl,
       if( error != HD_NO_ERROR ) {
         return throw_error(error);
       }
+
+      // add this if to avoid crash (try to allocate 0-length buffer) when no giants found, and is also a minor optimize
+      if(prev_giant_count < d_giant_peaks.size()){
       
-      hd_size rel_cur_filtered_offset = (cur_filtered_offset /
-                                         rel_tscrunch_width);
+        hd_size rel_cur_filtered_offset = (cur_filtered_offset /
+                                           rel_tscrunch_width);
 
-      sycl::impl::transform(
-          execution_policy,
-          d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
-          d_giant_inds.begin() + prev_giant_count,
-          /*first_idx +*/ [=](auto _1) {
-            return (_1 + rel_cur_filtered_offset) * cur_scrunch;
-      });
-      sycl::impl::transform(
-          execution_policy,
-          d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
-          d_giant_begins.begin() + prev_giant_count,
-          /*first_idx +*/ [=](auto _1) {
-            return (_1 + rel_cur_filtered_offset) * cur_scrunch;
-      });
-      sycl::impl::transform(
-          execution_policy,
-          d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
-          d_giant_ends.begin() + prev_giant_count,
-          /*first_idx +*/ [=](auto _1) {
-            return (_1 + rel_cur_filtered_offset) * cur_scrunch;
-      });
+        sycl::impl::transform(
+            execution_policy,
+            d_giant_inds.begin() + prev_giant_count, d_giant_inds.end(),
+            d_giant_inds.begin() + prev_giant_count,
+            /*first_idx +*/ [=](auto _1) {
+              return (_1 + rel_cur_filtered_offset) * cur_scrunch;
+        });
+        sycl::impl::transform(
+            execution_policy,
+            d_giant_begins.begin() + prev_giant_count, d_giant_begins.end(),
+            d_giant_begins.begin() + prev_giant_count,
+            /*first_idx +*/ [=](auto _1) {
+              return (_1 + rel_cur_filtered_offset) * cur_scrunch;
+        });
+        sycl::impl::transform(
+            execution_policy,
+            d_giant_ends.begin() + prev_giant_count, d_giant_ends.end(),
+            d_giant_ends.begin() + prev_giant_count,
+            /*first_idx +*/ [=](auto _1) {
+              return (_1 + rel_cur_filtered_offset) * cur_scrunch;
+        });
 
-      d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx);
-      d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
-      // Note: This could be used to track total member samples if desired
-      d_giant_members.resize(d_giant_peaks.size(), 1);
+        d_giant_filter_inds.resize(d_giant_peaks.size(), filter_idx);
+        d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
+        // Note: This could be used to track total member samples if desired
+        d_giant_members.resize(d_giant_peaks.size(), 1);
+      }
       
       stop_timer(giants_timer);
       
