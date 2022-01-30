@@ -21,7 +21,9 @@
 #include <iostream>
 #include <boost/tuple/tuple.hpp>
 #include <boost/iterator/counting_iterator.hpp>
+#include <boost/iterator/permutation_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
+#include <sycl/algorithm/copy.hpp>
 #include <sycl/algorithm/copy_if.hpp>
 #include <sycl/algorithm/adjacent_difference.hpp>
 #include <sycl/algorithm/reduce_by_key.hpp>
@@ -67,7 +69,7 @@ template <typename T> struct plus_one {
 class GiantFinder_impl {
   device_vector_wrapper<hd_float> d_giant_data;
   device_vector_wrapper<hd_size> d_giant_data_inds;
-  device_vector_wrapper<int> d_giant_data_segments;
+  device_vector_wrapper<hd_size> d_giant_data_segments;
   device_vector_wrapper<hd_size> d_giant_data_seg_ids;
 
 public:
@@ -154,16 +156,7 @@ public:
     */
     // tried serveral zip_iterators but not compatible with this algorithm implmention
     // TODO: check this copy_if
-    
     hd_size giant_data_count2 =
-        sycl::impl::copy_if(execution_policy,
-            d_data_begin,
-            d_data_begin + count,
-            (d_data_begin), // the stencil
-            d_giant_data.begin(),
-            greater_than_val<hd_float>(thresh))
-        - d_giant_data.begin();
-    hd_size giant_data_count2_ =
         sycl::impl::copy_if(execution_policy,
             boost::iterators::make_counting_iterator(0u),
             boost::iterators::make_counting_iterator(0u) + count,
@@ -171,8 +164,12 @@ public:
             d_giant_data_inds.begin(),
             greater_than_val<hd_float>(thresh))
         - d_giant_data_inds.begin();
-    assert(giant_data_count2 == giant_data_count2_);
-    
+    sycl::impl::copy(execution_policy,
+            boost::make_permutation_iterator(d_data_begin, d_giant_data_inds.begin()),
+            boost::make_permutation_iterator(d_data_begin, d_giant_data_inds.begin()) + giant_data_count2,
+            d_giant_data.begin()
+    );
+
     /* """
     no known conversion from 'ZipIter<dpct::device_pointer<float>,
     boost::iterators::counting_iterator<unsigned int, boost::use_default, boost::use_default>>::reference'
@@ -227,7 +224,7 @@ public:
         d_giant_data_segments.begin(),
         d_giant_data_segments.end(),
         d_giant_data_seg_ids.begin(),
-        0, std::plus());
+        static_cast<hd_size>(0), std::plus());
 
     // We extract the number of giants from the end of the exclusive scan
     // hd_size giant_count = d_giant_data_seg_ids.back() +

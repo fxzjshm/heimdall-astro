@@ -13,6 +13,7 @@
 #include <type_traits>
 
 #include <PRNG/MWC64X.hpp>
+#include <boost/iterator/counting_iterator.hpp>
 #include "discard_iterator.hpp"
 #include "permutation_iterator.hpp"
 
@@ -74,3 +75,8 @@ extern sycl::sycl_execution_policy<> execution_policy;
 template <typename> struct is_tuple: std::false_type {};
 template <typename ...T> struct is_tuple<std::tuple<T...>>: std::true_type {};
 
+#if defined(SYCL_LANGUAGE_VERSION) && defined (__INTEL_LLVM_COMPILER)
+// patch for foreign iterators
+template <typename T>
+struct sycl::is_device_copyable<boost::iterators::counting_iterator<T>> : std::true_type {};
+#endif
