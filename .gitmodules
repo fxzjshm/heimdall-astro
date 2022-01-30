@@ -1,3 +1,9 @@
 [submodule "3rdparty/SYCL-PRNG"]
 	path = 3rdparty/SYCL-PRNG
 	url = git@github.com:Wigner-GPU-Lab/SYCL-PRNG.git
+[submodule "3rdparty/SyclParallelSTL"]
+	path = 3rdparty/SyclParallelSTL
+	url = https://github.com/fxzjshm/SyclParallelSTL
+[submodule "3rdparty/ZipIterator"]
+	path = 3rdparty/ZipIterator
+	url = https://github.com/dpellegr/ZipIterator.git
