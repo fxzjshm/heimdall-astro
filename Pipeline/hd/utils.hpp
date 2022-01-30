@@ -30,11 +30,15 @@ struct uniform_int_distribution {
     }
 };
 
+// global execution_policy
+extern sycl::sycl_execution_policy<> execution_policy;
+
 template <typename T, typename A1, typename A2>
 void oneapi_copy(dpct::device_vector<T, A2> &d,
                  std::vector<T, A1> &h) {
     h.resize(d.size());
-    dpct::copy(d.begin(), d.end(), h.begin());
+    auto queue = execution_policy.get_queue();
+    dpct::copy(d.begin(), d.end(), h.begin(), queue);
 }
 
 #ifndef DPCT_USM_LEVEL_NONE
@@ -55,10 +59,13 @@ public:
 
     void resize(size_type new_size, const T &x = T()) {
         size_type old_size = dpct::device_vector<T, Allocator>::size();
-        // TODO optimize by fill()
         dpct::device_vector<T, Allocator>::resize(new_size, x);
-        for (size_type i = old_size; i < new_size; i++) {
-            dpct::device_vector<T, Allocator>::operator[](i) = x;
+        // wait here as operations above may be async, otherwise iterators may be invalid if memory is reallocated
+        dpct::get_default_queue().wait();
+        if (old_size < new_size) {
+            ::sycl::impl::fill(execution_policy,
+                dpct::device_vector<T, Allocator>::begin() + old_size, dpct::device_vector<T, Allocator>::begin() + new_size, x
+            );
         }
     }
 };
@@ -66,9 +73,6 @@ public:
 namespace sycl_pstl {
     using namespace sycl;
 }
-
-// global execution_policy
-extern sycl::sycl_execution_policy<> execution_policy;
 
 // https://stackoverflow.com/a/48458312 by smac89
 // used in maximum_first functor for different situations
