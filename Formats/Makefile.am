@@ -1,6 +1,4 @@
 
-INCLUDES = -I$(top_srcdir)/src
-
 lib_LTLIBRARIES = libhdformats.la
 
 libhdformats_la_SOURCES = SigprocFile.C 
