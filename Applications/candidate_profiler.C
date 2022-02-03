@@ -595,7 +595,7 @@ int main(int argc, char* argv[])
 	  cerr << "Min value        = " << minval << endl;
   	cerr << "Max data index   = " << max_idx << endl;
 	  cerr << "Max sample index = " << max_idx%out_nsamps << endl;
-	  cerr << " Dist from given = " << abs(max_idx%out_nsamps - out_nsamps/2) << endl;
+	  cerr << " Dist from given = " << std::abs(static_cast<ptrdiff_t>(max_idx%out_nsamps) - static_cast<ptrdiff_t>(out_nsamps/2)) << endl;
   }
 	// TODO: Fix this for DM trial bounds
 	size_t dm_idx_start = dm_idx > out_dm_count/2 ? dm_idx - out_dm_count/2 : 0;
@@ -603,7 +603,7 @@ int main(int argc, char* argv[])
   if (verbose)
   {
 	  cerr << "Max DM index     = " << max_dm_idx << endl;
-	  cerr << " Dist from given = " << abs(max_dm_idx - dm_idx) << endl;
+	  cerr << " Dist from given = " << std::abs(static_cast<ptrdiff_t>(max_dm_idx) - static_cast<ptrdiff_t>(dm_idx)) << endl;
 	  cerr << "Extracting SNR vs. DM..." << endl;
   }
 	std::ofstream snr_dm_file("snr_dm.dat");

@@ -38,7 +38,7 @@ inline bool are_coincident(hd_size samp_i, hd_size samp_j, hd_size begin_i,
         //  abs((int)filter_j - (int)filter_i) <= filter_tol &&
         //  abs((int)dm_j - (int)dm_i ) <= dm_tol;
         // New version avoiding use of 'begin' and 'end'
-        return std::abs((int)samp_j - (int)samp_i) <= time_tol &&
-               std::abs((int)filter_j - (int)filter_i) <= filter_tol &&
-               std::abs((int)dm_j - (int)dm_i) <= dm_tol;
+        return sycl::abs((int)samp_j - (int)samp_i) <= time_tol &&
+               sycl::abs((int)filter_j - (int)filter_i) <= filter_tol &&
+               sycl::abs((int)dm_j - (int)dm_i) <= dm_tol;
 }

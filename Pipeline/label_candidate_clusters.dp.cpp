@@ -96,7 +96,7 @@ struct range_min_functor : public thrust::binary_function<void,void,ValueType> {
 /* DPCT_ORIG __device__ unsigned int d_counter;*/
 // dpct::global_memory<unsigned int, 0> d_counter;
 // TODO: check if this can work
-unsigned int d_counter;
+// unsigned int* d_counter_ptr = nullptr;
 
 // Finds the root of a chain of equivalent labels
 //   E.g., 3->1, 4->3, 8->4, 5->8 => [1,3,4,5,8]->1
@@ -105,7 +105,8 @@ unsigned int d_counter;
 template<typename T>
 struct trace_equivalency_chain {
 	T* new_labels;
-	trace_equivalency_chain(T* new_labels_) : new_labels(new_labels_) {}
+    unsigned int* d_counter_ptr;
+	trace_equivalency_chain(T* new_labels_, unsigned int* d_counter_ptr_) : new_labels(new_labels_), d_counter_ptr(d_counter_ptr_) {}
     inline /*__host__*/
     void operator()(unsigned int old_label) const {
         T cur_label = old_label;
@@ -116,7 +117,7 @@ struct trace_equivalency_chain {
 			//                 new_labels[old_label] each iteration vs.
 			//                 only at the end (see commented line below).
 			//               It appears to make only 10-20% difference
-            sycl::atomic<unsigned int>(sycl::global_ptr<unsigned int>(&d_counter)).fetch_add(1);
+            sycl::atomic<unsigned int>(sycl::global_ptr<unsigned int>(d_counter_ptr)).fetch_add(1);
         }
 		new_labels[old_label] = cur_label;
 		
@@ -358,15 +359,15 @@ hd_error label_candidate_clusters(hd_size            count,
 	//         as efficient as the sequential version but should win out
 	//         in overall speed.
 
-	unsigned int* d_counter_address=&d_counter;
+	unsigned int* d_counter_address = reinterpret_cast<unsigned int *>(sycl::malloc_shared(1 * sizeof(unsigned int), execution_policy.get_queue()));
     // *((void **)&d_counter_address) = d_counter.get_ptr();
-    dpct::device_pointer<unsigned int> d_counter_ptr(d_counter_address);
+    unsigned int* d_counter_ptr(d_counter_address);
     *d_counter_ptr = 0;
 
     sycl::impl::for_each(execution_policy,
                   boost::iterators::make_counting_iterator<unsigned int>(0),
                   boost::iterators::make_counting_iterator<unsigned int>(count),
-                  trace_equivalency_chain<hd_size>(d_labels));
+                  trace_equivalency_chain<hd_size>(d_labels, d_counter_ptr));
 
     //std::cout << "Total chain iterations: " << *d_counter_ptr << std::endl;
 	

@@ -18,6 +18,7 @@
 
 #include <vector>
 #include <memory>
+#include <numeric>
 #include <iostream>
 using std::cout;
 using std::cerr;
