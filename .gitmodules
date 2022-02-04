@@ -1,6 +1,7 @@
 [submodule "3rdparty/SYCL-PRNG"]
 	path = 3rdparty/SYCL-PRNG
-	url = https://github.com/Wigner-GPU-Lab/SYCL-PRNG.git
+	url = https://github.com/fxzjshm/SYCL-PRNG.git
+    branch = tmp-fix
 [submodule "3rdparty/SyclParallelSTL"]
 	path = 3rdparty/SyclParallelSTL
 	url = https://github.com/fxzjshm/SyclParallelSTL
