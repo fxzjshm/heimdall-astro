@@ -498,20 +498,20 @@ hd_error hd_execute(hd_pipeline pl,
     start_timer(copy_timer);
     switch( pl->params.dm_nbits ) {
     case 8:
-      sycl::impl::copy(execution_policy,
+      std::copy(
                 (unsigned char *)&pl->h_dm_series[offset],
                 (unsigned char *)&pl->h_dm_series[offset] + cur_nsamps,
                 pl->d_time_series.begin());
       break;
     case 16:
-      sycl::impl::copy(execution_policy,
+      std::copy(
                 (unsigned short *)&pl->h_dm_series[offset],
                 (unsigned short *)&pl->h_dm_series[offset] + cur_nsamps,
                 pl->d_time_series.begin());
       break;
     case 32:
       // Note: 32-bit implies float, not unsigned int
-      sycl::impl::copy(execution_policy,
+      std::copy(
                 (float *)&pl->h_dm_series[offset],
                 (float *)&pl->h_dm_series[offset] + cur_nsamps,
                 pl->d_time_series.begin());
@@ -519,6 +519,7 @@ hd_error hd_execute(hd_pipeline pl,
     default:
       return HD_INVALID_NBITS;
     }
+    execution_policy.get_queue().prefetch(time_series, pl->d_time_series.size() * sizeof(typename std::remove_pointer<decltype(time_series)>::type));
     stop_timer(copy_timer);
     
     // Remove the baseline
