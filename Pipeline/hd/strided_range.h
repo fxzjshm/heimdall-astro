@@ -11,12 +11,6 @@
 
 #pragma once
 
-#if __has_include(<sycl/sycl.hpp>)
-#include <sycl/sycl.hpp>
-#else
-#include <CL/sycl.hpp>
-#endif
-
 #include <boost/iterator/counting_iterator.hpp>
 #include <boost/iterator/permutation_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>

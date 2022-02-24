@@ -5,22 +5,12 @@
  *
  ***************************************************************************/
 
-#include <oneapi/dpl/execution>
-#include <oneapi/dpl/algorithm>
-#if __has_include(<sycl/sycl.hpp>)
-#include <sycl/sycl.hpp>
-#else
-#include <CL/sycl.hpp>
-#endif
-
-#include <dpct/dpct.hpp>
-
 #include <vector>
 #include <string>
 using std::string;
 #include <fstream>
 
-#include <dpct/dpl_utils.hpp>
+#include <dpct/device.hpp>
 
 namespace detail {
 // TODO: These were copied from header.hpp. Not sure if this is a good idea.
@@ -77,7 +67,7 @@ void write_time_series_header(size_t nbits, float dt, std::ofstream& out_file) {
 	//header_write(out_file, "barycentric", 6);//header.barycentric);
 	header_write(out_file, "nchans", 1);//nbands);
 	header_write(out_file, "nbits", (int)nbits);
-	//header_write(out_file, "tstart", 0.f);//header.tstart);
+	header_write(out_file, "tstart", 0.f);//header.tstart);
 	header_write(out_file, "tsamp", dt);
 	header_write(out_file, "nifs", 1);//header.nifs);
 	header_write(out_file, "HEADER_END");

@@ -14,6 +14,8 @@
 
 #include <PRNG/MWC64X.hpp>
 #include <boost/iterator/counting_iterator.hpp>
+#include <boost/iterator/permutation_iterator.hpp>
+#include <boost/iterator/transform_iterator.hpp>
 #include "discard_iterator.hpp"
 #include "permutation_iterator.hpp"
 
@@ -66,6 +68,7 @@ public:
             ::sycl::impl::fill(execution_policy,
                 dpct::device_vector<T, Allocator>::begin() + old_size, dpct::device_vector<T, Allocator>::begin() + new_size, x
             );
+            execution_policy.get_queue().wait();
         }
     }
 };
@@ -83,4 +86,6 @@ template <typename ...T> struct is_tuple<std::tuple<T...>>: std::true_type {};
 // patch for foreign iterators
 template <typename T>
 struct sycl::is_device_copyable<boost::iterators::counting_iterator<T>> : std::true_type {};
+template <class ElementIterator, class IndexIterator>
+struct sycl::is_device_copyable<boost::iterators::permutation_iterator<ElementIterator, IndexIterator>, std::enable_if_t<!std::is_trivially_copyable<boost::iterators::permutation_iterator<ElementIterator, IndexIterator>>::value>> : std::true_type {};
 #endif

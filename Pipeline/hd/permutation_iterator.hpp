@@ -4,9 +4,7 @@
 #include <iterator>
 
 /**
- *  @brief  Discard output from some algorithms. Modfied from ostream_iterator and ZipIter
- *
- *  @tparam  T  The type to write to the ostream.
+ *  @brief  Permutation iterator. Modfied from ostream_iterator and ZipIter
 */
 template<class ElementIterator, class IndexIterator>
 class permutation_iterator {
