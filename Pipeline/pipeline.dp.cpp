@@ -14,6 +14,7 @@
 #include <sycl/algorithm/copy.hpp>
 #include <sycl/algorithm/reduce.hpp>
 #include <sycl/algorithm/gather.hpp>
+#include <sycl/helpers/sycl_usm_vector.hpp>
 #include <dpct/dpl_extras/iterators.h>
 
 #include <vector>
@@ -66,7 +67,7 @@ using std::endl;
 sycl::sycl_execution_policy<> execution_policy;
 
 // for host-vector and device_vector
-template<typename T> using host_vector = std::vector<T>;
+template<typename T> using host_vector = sycl::helpers::usm_vector<T>;
 template<typename T> using device_vector = device_vector_wrapper<T>;
 
  // For std::pair
@@ -496,22 +497,23 @@ hd_error hd_execute(hd_pipeline pl,
     // Copy the time series to the device and convert to floats
     hd_size offset = dm_idx * series_stride * pl->params.dm_nbits/8;
     start_timer(copy_timer);
+    execution_policy.get_queue().prefetch(&pl->h_dm_series[offset], cur_nsamps * pl->params.dm_nbits / 8);
     switch( pl->params.dm_nbits ) {
     case 8:
-      std::copy(
+      sycl::impl::copy(execution_policy,
                 (unsigned char *)&pl->h_dm_series[offset],
                 (unsigned char *)&pl->h_dm_series[offset] + cur_nsamps,
                 pl->d_time_series.begin());
       break;
     case 16:
-      std::copy(
+      sycl::impl::copy(execution_policy,
                 (unsigned short *)&pl->h_dm_series[offset],
                 (unsigned short *)&pl->h_dm_series[offset] + cur_nsamps,
                 pl->d_time_series.begin());
       break;
     case 32:
       // Note: 32-bit implies float, not unsigned int
-      std::copy(
+      sycl::impl::copy(execution_policy,
                 (float *)&pl->h_dm_series[offset],
                 (float *)&pl->h_dm_series[offset] + cur_nsamps,
                 pl->d_time_series.begin());
@@ -519,7 +521,6 @@ hd_error hd_execute(hd_pipeline pl,
     default:
       return HD_INVALID_NBITS;
     }
-    execution_policy.get_queue().prefetch(time_series, pl->d_time_series.size() * sizeof(typename std::remove_pointer<decltype(time_series)>::type));
     stop_timer(copy_timer);
     
     // Remove the baseline
