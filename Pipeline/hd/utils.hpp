@@ -17,7 +17,7 @@
 #include <boost/iterator/permutation_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 #include "discard_iterator.hpp"
-#include "permutation_iterator.hpp"
+//#include "permutation_iterator.hpp"
 
 typedef prng::mwc64x_32 random_engine;
 template <typename T>
@@ -96,7 +96,7 @@ private:
 #elif defined(__HIPSYCL__)
 
 #if defined(__HIPSYCL_ENABLE_CUDA_TARGET__)
-    return sycl::mem_advise(ptr, num_bytes, cuMemAdviseSetPreferredLocation, queue);
+    return sycl::mem_advise(ptr, num_bytes, cudaMemAdviseSetPreferredLocation, queue);
 #elif defined(__HIPSYCL_ENABLE_HIP_TARGET__)
     return sycl::mem_advise(ptr, num_bytes, hipMemAdviseSetPreferredLocation, queue);
 #elif defined(__HIPSYCL_ENABLE_OMPHOST_TARGET__)
