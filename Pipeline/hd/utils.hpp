@@ -43,9 +43,79 @@ void oneapi_copy(dpct::device_vector<T, A2> &d,
     dpct::copy(d.begin(), d.end(), h.begin(), queue);
 }
 
+template <typename T, sycl::usm::alloc AllocKind = sycl::usm::alloc::device,
+          size_t align = sizeof(T)>
+class device_allocator {
+public:
+  device_allocator(cl::sycl::queue &queue_) : queue(queue_){};
+
+  T *allocate(std::size_t num_elements) {
+    T *ptr = sycl::aligned_alloc_device<T>(align, num_elements, queue);
+    if (!ptr)
+      throw std::runtime_error("device_allocator: Allocation failed");
+    return ptr;
+  }
+
+  void deallocate(T *ptr, std::size_t size) {
+    if (ptr)
+      sycl::free(ptr, queue);
+  }
+
+private:
+  cl::sycl::queue queue;
+};
+
+template <typename T, sycl::usm::alloc AllocKind = sycl::usm::alloc::shared,
+          size_t align = sizeof(T)>
+class usm_device_allocator : public sycl::usm_allocator<T, AllocKind, align> {
+  using Base = sycl::usm_allocator<T, AllocKind, align>;
+
+public:
+  usm_device_allocator(cl::sycl::queue &queue_) : Base(queue_), queue(queue_){};
+
+  T *allocate(std::size_t num_elements) {
+    T *ptr = Base::allocate(num_elements);
+    mem_advise(ptr, num_elements * sizeof(T), queue);
+    return ptr;
+  }
+
+private:
+  cl::sycl::queue queue;
+
+  // backend specific
+  inline void mem_advise(const void* ptr, size_t num_bytes, sycl::queue& queue) {
+#if defined(SYCL_IMPLEMENTATION_ONEAPI)
+
+#if defined(SYCL_EXT_ONEAPI_BACKEND_CUDA)
+    return queue.mem_advise(ptr, num_bytes, PI_MEM_ADVICE_CUDA_SET_PREFERRED_LOCATION);
+#else
+#warning "Detected OneAPI but no known advice. (TODO)"
+    return;
+#endif // defined(SYCL_EXT_ONEAPI_BACKEND_CUDA)
+
+#elif defined(__HIPSYCL__)
+
+#if defined(__HIPSYCL_ENABLE_CUDA_TARGET__)
+    return sycl::mem_advise(ptr, num_bytes, cuMemAdviseSetPreferredLocation, queue);
+#elif defined(__HIPSYCL_ENABLE_HIP_TARGET__)
+    return sycl::mem_advise(ptr, num_bytes, hipMemAdviseSetPreferredLocation, queue);
+#elif defined(__HIPSYCL_ENABLE_OMPHOST_TARGET__)
+    return;
+#else
+#warning "Detected hipSYCL but no known advice. (TODO)"
+    return;
+#endif
+
+#else
+#warning "Unknown backend for advising USM allocator to use device memory, performance may suffer."
+    return;
+#endif
+  }
+};
+
 #ifndef DPCT_USM_LEVEL_NONE
 template <typename T,
-          typename Allocator = sycl::usm_allocator<T, sycl::usm::alloc::shared>>
+          typename Allocator = usm_device_allocator<T> /* device_allocator<T> */ /* sycl::usm_allocator<T, sycl::usm::alloc::shared> */ >
 #else
 template <typename T, typename Allocator = cl::sycl::buffer_allocator>
 #endif
