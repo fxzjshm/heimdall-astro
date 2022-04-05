@@ -113,9 +113,7 @@ hd_error allocate_gpu(const hd_params params) {
   if( params.verbosity >= 1 ) {
     cout << "Process " << proc_idx << " using GPU " << gpu_idx << endl;
   }
-
-  cerr << "yield_cpu is not supported yet in this implemention" << endl;
-  /*
+#if defined(__HIPSYCL_ENABLE_CUDA_TARGET__)
   int cerror;
   if( !params.yield_cpu ) {
     if( params.verbosity >= 2 ) {
@@ -139,7 +137,9 @@ hd_error allocate_gpu(const hd_params params) {
       return throw_cuda_error(cerror);
     }
   }
-  */
+#else
+  cerr << "yield_cpu is not supported yet in this implemention" << endl;
+#endif // defined(__HIPSYCL_ENABLE_CUDA_TARGET__)
   
   return HD_NO_ERROR;
 }
