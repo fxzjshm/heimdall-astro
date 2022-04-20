@@ -81,7 +81,8 @@ private:
 #if defined(SYCL_IMPLEMENTATION_ONEAPI)
 
 #if defined(SYCL_EXT_ONEAPI_BACKEND_CUDA)
-    return queue.mem_advise(ptr, num_bytes, PI_MEM_ADVICE_CUDA_SET_PREFERRED_LOCATION);
+    queue.mem_advise(ptr, num_bytes, PI_MEM_ADVICE_CUDA_SET_PREFERRED_LOCATION).wait();
+    return;
 #else
 #warning "Detected OneAPI but no known advice. (TODO)"
     return;
