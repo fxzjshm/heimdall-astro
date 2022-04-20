@@ -17,7 +17,9 @@
 #include <boost/iterator/permutation_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 #include "discard_iterator.hpp"
-//#include "permutation_iterator.hpp"
+#include "permutation_iterator.hpp"
+#include <sycl/container/device_vector.hpp>
+#include <sycl/helpers/sycl_usm_vector.hpp>
 
 typedef prng::mwc64x_32 random_engine;
 template <typename T>
@@ -34,14 +36,6 @@ struct uniform_int_distribution {
 
 // global execution_policy
 extern sycl::sycl_execution_policy<> execution_policy;
-
-template <typename T, typename A1, typename A2>
-void oneapi_copy(dpct::device_vector<T, A2> &d,
-                 std::vector<T, A1> &h) {
-    h.resize(d.size());
-    auto queue = execution_policy.get_queue();
-    dpct::copy(d.begin(), d.end(), h.begin(), queue);
-}
 
 template <typename T, sycl::usm::alloc AllocKind = sycl::usm::alloc::device,
           size_t align = sizeof(T)>
@@ -113,9 +107,13 @@ private:
   }
 };
 
+//#define USE_DPCT 1
+
+#ifdef USE_DPCT
+
 #ifndef DPCT_USM_LEVEL_NONE
 template <typename T,
-          typename Allocator = usm_device_allocator<T> /* device_allocator<T> */ /* sycl::usm_allocator<T, sycl::usm::alloc::shared> */ >
+          typename Allocator = sycl::usm_allocator<T, sycl::usm::alloc::shared> >
 #else
 template <typename T, typename Allocator = cl::sycl::buffer_allocator>
 #endif
@@ -142,6 +140,77 @@ public:
         }
     }
 };
+
+namespace heimdall {
+namespace util {
+
+template <typename T>
+using device_iterator = dpct::device_iterator<T>;
+
+template <typename T>
+using device_pointer = dpct::device_pointer<T>;
+
+template <typename... Args>
+inline decltype(auto) get_raw_pointer(Args &&...args) {
+  return dpct::get_raw_pointer(std::forward<Args>(args)...);
+}
+
+
+} // namespace util
+} // namespace heimdall
+
+#else
+
+// Switch between implementations
+template <typename T, typename Allocator = /*sycl::helpers::usm_allocator<T>*/  sycl::helpers::device_allocator<T> >
+using device_vector_wrapper = sycl::impl::device_vector<T, Allocator>;
+
+namespace heimdall {
+namespace util {
+
+template <typename T>
+using device_iterator = sycl::helpers::device_iterator<T>;
+
+template <typename T>
+using device_pointer = sycl::helpers::device_pointer<T>;
+
+template <typename... Args>
+inline decltype(auto) get_raw_pointer(Args &&...args) {
+  return sycl::helpers::get_raw_pointer(std::forward<Args>(args)...);
+}
+
+} // namespace util
+} // namespace heimdall
+
+#endif
+
+namespace heimdall {
+namespace util {
+
+
+template <typename T, typename A2, typename OutputIterator>
+inline void copy(const device_vector_wrapper<T, A2> &d, OutputIterator out) {
+  static_assert(std::is_convertible_v<decltype(&(*out)), T*>);
+  auto queue = execution_policy.get_queue();
+  queue.copy(heimdall::util::get_raw_pointer(&d[0]), &(*out), d.size()).wait();
+}
+
+template <typename T, typename A1, typename A2>
+inline void copy(const device_vector_wrapper<T, A2> &d, std::vector<T, A1> &h) {
+  h.resize(d.size());
+  copy(d, h.begin());
+}
+
+template <typename T, typename OutputIterator>
+inline void copy(const device_pointer<T> d_in_first, const device_pointer<T> d_in_last, OutputIterator h_out) {
+  static_assert(std::is_convertible_v<decltype(&(*h_out)), T*>);
+  auto size = std::distance(d_in_first, d_in_last);
+  auto queue = execution_policy.get_queue();
+  queue.copy(heimdall::util::get_raw_pointer(d_in_first), &(*h_out), size).wait();
+}
+
+} // namespace util
+} // namespace heimdall
 
 namespace sycl_pstl {
     using namespace sycl;

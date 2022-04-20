@@ -59,7 +59,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	
 	//thrust::device_vector<hd_float> d_spectrum(nchans);
 	//hd_float* d_spectrum_ptr = thrust::raw_pointer_cast(&d_spectrum[0]);
-    dpct::device_pointer<hd_float> d_bandpass_begin(d_bandpass);
+    heimdall::util::device_pointer<hd_float> d_bandpass_begin(d_bandpass);
 
     // First we find the median of a selection of sample spectra
 	// TODO: Can/should make this a parameter?
@@ -76,15 +76,15 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
                                                         5 / 5 * nchans);
 
         hd_float *d_sample_spectra1_ptr =
-            dpct::get_raw_pointer(&d_sample_spectra1[0]);
+            heimdall::util::get_raw_pointer(&d_sample_spectra1[0]);
         hd_float *d_sample_spectra2_ptr =
-            dpct::get_raw_pointer(&d_sample_spectra2[0]);
+            heimdall::util::get_raw_pointer(&d_sample_spectra2[0]);
         hd_float *d_sample_spectra3_ptr =
-            dpct::get_raw_pointer(&d_sample_spectra3[0]);
+            heimdall::util::get_raw_pointer(&d_sample_spectra3[0]);
         hd_float *d_sample_spectra4_ptr =
-            dpct::get_raw_pointer(&d_sample_spectra4[0]);
+            heimdall::util::get_raw_pointer(&d_sample_spectra4[0]);
         hd_float *d_sample_spectra5_ptr =
-            dpct::get_raw_pointer(&d_sample_spectra5[0]);
+            heimdall::util::get_raw_pointer(&d_sample_spectra5[0]);
 
     // TODO: Make this more random?
 	hd_size seed = 123456;
@@ -126,7 +126,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	// Now we smooth the spectrum to produce an estimate of the bandpass
     device_vector_wrapper<hd_float> d_scrunched_spectrum(nchans / 5);
     hd_float *d_scrunched_spectrum_ptr =
-            dpct::get_raw_pointer(&d_scrunched_spectrum[0]);
+            heimdall::util::get_raw_pointer(&d_scrunched_spectrum[0]);
     // TODO: This algorithm was derived empirically. It may not be suitable
 	//         if applied to a different observing setup.
 	median_scrunch5(d_bandpass, nchans,
@@ -158,8 +158,8 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	//         making host versions of the median_scrunch functions.
     device_vector_wrapper<hd_float> d_sample_rms1(spectrum_count);
     device_vector_wrapper<hd_float> d_sample_rms2(spectrum_count);
-    hd_float *d_sample_rms1_ptr = dpct::get_raw_pointer(&d_sample_rms1[0]);
-    hd_float *d_sample_rms2_ptr = dpct::get_raw_pointer(&d_sample_rms2[0]);
+    hd_float *d_sample_rms1_ptr = heimdall::util::get_raw_pointer(&d_sample_rms1[0]);
+    hd_float *d_sample_rms2_ptr = heimdall::util::get_raw_pointer(&d_sample_rms2[0]);
 
     for( hd_size i=0; i<spectrum_count; ++i ) {
 	// Subtract the bandpass from the spectrum
@@ -180,7 +180,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	}
 
     device_vector_wrapper<hd_float> d_mad(nchans);
-    hd_float *d_mad_ptr = dpct::get_raw_pointer(&d_mad[0]);
+    hd_float *d_mad_ptr = heimdall::util::get_raw_pointer(&d_mad[0]);
 
     // Compute the 'remedian' (recursive median) of the sample spectra
 	// Note: We do this instead of a proper median for performance and simplicity
@@ -238,7 +238,7 @@ hd_error measure_bandpass(const hd_byte* d_filterbank,
 	
 	// Find the median RMS across the band
 	std::vector<hd_float> h_mad(nchans);
-    dpct::copy(d_mad.begin(), d_mad.end(), h_mad.begin());
+    heimdall::util::copy(d_mad.begin(), d_mad.end(), h_mad.begin());
     std::nth_element(h_mad.begin(), h_mad.begin()+h_mad.size()/2, h_mad.end());
 	*rms = h_mad[h_mad.size()/2];
 	

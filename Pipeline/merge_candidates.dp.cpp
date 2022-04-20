@@ -22,10 +22,10 @@
 
 // modified for tuple incompatibility in algorithm implemention
 
-typedef dpct::device_pointer<hd_float> float_iterator;
-typedef dpct::device_pointer<hd_size> size_iterator;
-typedef dpct::device_pointer<const hd_float> const_float_iterator;
-typedef dpct::device_pointer<const hd_size> const_size_iterator;
+typedef heimdall::util::device_pointer<hd_float> float_iterator;
+typedef heimdall::util::device_pointer<hd_size> size_iterator;
+typedef heimdall::util::device_pointer<const hd_float> const_float_iterator;
+typedef heimdall::util::device_pointer<const hd_size> const_size_iterator;
 typedef std::tuple<hd_float, hd_size, hd_size, hd_size, hd_size, hd_size, hd_size> candidate_tuple;
 
 struct merge_candidates_functor {

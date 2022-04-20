@@ -29,7 +29,7 @@ class GetRMSPlan_impl {
 public:
 	hd_float exec(hd_float* d_data, hd_size count) {
         
-        dpct::device_pointer<hd_float> d_data_begin(d_data);
+        heimdall::util::device_pointer<hd_float> d_data_begin(d_data);
 
         // This algorithm works by taking the absolute values of the data
 		//   and then repeatedly scrunching them using median-of-5 in order
@@ -38,8 +38,8 @@ public:
 		
 		buf1.resize(count);
 		buf2.resize(count/5);
-        hd_float *buf1_ptr = dpct::get_raw_pointer(&buf1[0]);
-        hd_float *buf2_ptr = dpct::get_raw_pointer(&buf2[0]);
+        hd_float *buf1_ptr = heimdall::util::get_raw_pointer(&buf1[0]);
+        hd_float *buf2_ptr = heimdall::util::get_raw_pointer(&buf2[0]);
 
         sycl::impl::transform(execution_policy,
                                d_data_begin, d_data_begin + count, buf1.begin(),
@@ -50,7 +50,7 @@ public:
 			std::swap(buf1_ptr, buf2_ptr);
 		}
 		// Note: Result is now at buf1_ptr
-        dpct::device_pointer<hd_float> buf1_begin(buf1_ptr);
+        heimdall::util::device_pointer<hd_float> buf1_begin(buf1_ptr);
         hd_float med_abs_dev = buf1_begin[0];
 		hd_float rms = med_abs_dev * 1.4862;
 		
@@ -72,8 +72,8 @@ hd_float get_rms(hd_float* d_data, hd_size count) {
 hd_error normalise(hd_float* d_data, hd_size count)
 {
         
-        dpct::device_pointer<hd_float> d_data_begin(d_data);
-        dpct::device_pointer<hd_float> d_data_end(d_data + count);
+        heimdall::util::device_pointer<hd_float> d_data_begin(d_data);
+        heimdall::util::device_pointer<hd_float> d_data_end(d_data + count);
 
         hd_float rms = get_rms(d_data, count);
         sycl::impl::transform(execution_policy,

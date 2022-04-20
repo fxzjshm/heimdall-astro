@@ -193,7 +193,7 @@ hd_error median_filter3(const hd_float* d_in,
                         hd_float*       d_out)
 {
     
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
     using boost::iterators::make_counting_iterator;
 
     sycl::impl::transform(execution_policy,
@@ -207,7 +207,7 @@ hd_error median_filter5(const hd_float* d_in,
                         hd_size         count,
                         hd_float*       d_out)
 {
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
     using boost::iterators::make_counting_iterator;
     sycl::impl::transform(execution_policy,
         make_counting_iterator<unsigned int>(0),
@@ -220,8 +220,8 @@ hd_error median_scrunch3(const hd_float* d_in,
                          hd_size         count,
                          hd_float*       d_out)
 {
-    dpct::device_pointer<const hd_float> d_in_begin(d_in);
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<const hd_float> d_in_begin(d_in);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
     if( count == 1 ) {
 		*d_out_begin = d_in_begin[0];
 	}
@@ -244,8 +244,8 @@ hd_error median_scrunch5(const hd_float* d_in,
                          hd_size         count,
                          hd_float*       d_out)
 {
-    dpct::device_pointer<const hd_float> d_in_begin(d_in);
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<const hd_float> d_in_begin(d_in);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
 
     if( count == 1 ) {
 		*d_out_begin = d_in_begin[0];
@@ -283,7 +283,7 @@ hd_error median_scrunch3_array(const hd_float* d_in,
                                hd_size         count,
                                hd_float*       d_out)
 {
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
     // Note: Truncating here is necessary
 	hd_size out_count = count / 3;
 	hd_size total     = array_size * out_count;
@@ -303,7 +303,7 @@ hd_error median_scrunch5_array(const hd_float* d_in,
                                hd_size         count,
                                hd_float*       d_out)
 {
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
     // Note: Truncating here is necessary
 	hd_size out_count = count / 5;
 	hd_size total     = array_size * out_count;
@@ -341,8 +341,8 @@ hd_error mean_filter2(const hd_float* d_in,
                       hd_size         count,
                       hd_float*       d_out)
 {
-    dpct::device_pointer<const hd_float> d_in_begin(d_in);
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<const hd_float> d_in_begin(d_in);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
     sycl::impl::adjacent_difference(execution_policy,
         // d_in_begin, d_in_begin + count, d_out_begin,
         d_in, d_in + count, d_out,
@@ -355,7 +355,7 @@ hd_error mean_scrunch2_array(const hd_float* d_in,
                              hd_size         count,
                              hd_float*       d_out)
 {
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
     // Note: Truncating here is necessary
 	hd_size out_count = count / 2;
 	hd_size total     = array_size * out_count;
@@ -409,7 +409,7 @@ hd_error linear_stretch(const hd_float* d_in,
                         hd_size         out_count)
 {
 	using boost::iterators::make_counting_iterator;
-    dpct::device_pointer<hd_float> d_out_begin(d_out);
+    heimdall::util::device_pointer<hd_float> d_out_begin(d_out);
 
     // Ewan found this code to contain a bug, and suggested the latter
 	// thrust::transform(make_counting_iterator<unsigned int>(0),

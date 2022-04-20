@@ -26,7 +26,7 @@ class RemoveBaselinePlan_impl {
 public:
 	hd_error exec(hd_float* d_data, hd_size count,
 	              hd_size smooth_radius) {
-        dpct::device_pointer<hd_float> d_data_begin(d_data);
+        heimdall::util::device_pointer<hd_float> d_data_begin(d_data);
 
         // This algorithm works by scrunching the data down to a time resolution
 		//   representative of the desired smoothing length and then stretching
@@ -50,8 +50,8 @@ public:
 
         buf1.resize(count_round);
 		buf2.resize(count_round/5);
-        hd_float *buf1_ptr = dpct::get_raw_pointer(&buf1[0]);
-        hd_float *buf2_ptr = dpct::get_raw_pointer(&buf2[0]);
+        hd_float *buf1_ptr = heimdall::util::get_raw_pointer(&buf1[0]);
+        hd_float *buf2_ptr = heimdall::util::get_raw_pointer(&buf2[0]);
 
         // First we re-sample to the rounded size
 		linear_stretch(d_data, count, buf1_ptr, count_round);
@@ -62,8 +62,8 @@ public:
 			std::swap(buf1_ptr, buf2_ptr);
 		}
 		// Note: Output is now at buf1_ptr
-        dpct::device_pointer<hd_float> buf1_begin(buf1_ptr);
-        dpct::device_pointer<hd_float> buf2_begin(buf2_ptr);
+        heimdall::util::device_pointer<hd_float> buf1_begin(buf1_ptr);
+        heimdall::util::device_pointer<hd_float> buf2_begin(buf2_ptr);
 
         // Then we need to extrapolate the ends
 		linear_stretch(buf1_ptr, sample_count, buf2_ptr+1, sample_count*2);
@@ -72,7 +72,7 @@ public:
 		                                buf2_begin[sample_count*2-1]);
 	
 		baseline.resize(count);
-        hd_float *baseline_ptr = dpct::get_raw_pointer(&baseline[0]);
+        hd_float *baseline_ptr = heimdall::util::get_raw_pointer(&baseline[0]);
 
         // And finally we stretch back to the original length
 		linear_stretch(buf2_ptr, sample_count*2+2, baseline_ptr, count);

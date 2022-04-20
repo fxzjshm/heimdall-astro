@@ -108,7 +108,8 @@ hd_error allocate_gpu(const hd_params params) {
     return HD_INVALID_DEVICE_INDEX;
   }
 
-  execution_policy = sycl::sycl_execution_policy(dpct::get_default_queue());
+  sycl::helpers::set_default_device(dpct::dev_mgr::instance().current_device());
+  execution_policy = sycl::helpers::default_execution_policy();
   
   if( params.verbosity >= 1 ) {
     cout << "Process " << proc_idx << " using GPU " << gpu_idx << endl;
@@ -429,8 +430,8 @@ hd_error hd_execute(hd_pipeline pl,
   device_vector_wrapper<hd_size> d_giant_dm_inds;
   device_vector_wrapper<hd_size> d_giant_members;
 
-  typedef dpct::device_pointer<hd_float> dev_float_ptr;
-  typedef dpct::device_pointer<hd_size> dev_size_ptr;
+  typedef heimdall::util::device_pointer<hd_float> dev_float_ptr;
+  typedef heimdall::util::device_pointer<hd_size> dev_size_ptr;
 
   if( pl->params.verbosity >= 2 ) {
     cout << "\tDedispersing for DMs " << dm_list[0]
@@ -492,7 +493,7 @@ hd_error hd_execute(hd_pipeline pl,
       cout << "\tBaselining and normalising each beam..." << endl;
     }
 
-    hd_float *time_series = dpct::get_raw_pointer(&pl->d_time_series[0]);
+    hd_float *time_series = heimdall::util::get_raw_pointer(&pl->d_time_series[0]);
 
     // Copy the time series to the device and convert to floats
     hd_size offset = dm_idx * series_stride * pl->params.dm_nbits/8;
@@ -580,7 +581,7 @@ hd_error hd_execute(hd_pipeline pl,
     stop_timer(filter_timer);
     // --------------------------
 
-    hd_float *filtered_series = dpct::get_raw_pointer(&pl->d_filtered_series[0]);
+    hd_float *filtered_series = heimdall::util::get_raw_pointer(&pl->d_filtered_series[0]);
 
     // Note: Filtering is done using a combination of tscrunching and
     //         'proper' boxcar convolution. The parameter min_tscrunch_width
@@ -630,11 +631,11 @@ hd_error hd_execute(hd_pipeline pl,
         hd_float rms = rms_getter.exec(filtered_series, cur_nsamps_filtered);
         sycl::impl::transform(
             execution_policy,
-            dpct::device_pointer<hd_float>(filtered_series),
-            dpct::device_pointer<hd_float>(filtered_series) +
+            heimdall::util::device_pointer<hd_float>(filtered_series),
+            heimdall::util::device_pointer<hd_float>(filtered_series) +
                 cur_nsamps_filtered,
             dpct::make_constant_iterator(hd_float(1.0) / rms),
-            dpct::device_pointer<hd_float>(filtered_series),
+            heimdall::util::device_pointer<hd_float>(filtered_series),
             std::multiplies<hd_float>());
       }
       else
@@ -643,11 +644,11 @@ hd_error hd_execute(hd_pipeline pl,
         dpct::constant_iterator<hd_float> norm_val_iter(1.0 / sqrt((hd_float)rel_filter_width));
         sycl::impl::transform(
             execution_policy,
-            dpct::device_pointer<hd_float>(filtered_series),
-            dpct::device_pointer<hd_float>(filtered_series) +
+            heimdall::util::device_pointer<hd_float>(filtered_series),
+            heimdall::util::device_pointer<hd_float>(filtered_series) +
                 cur_nsamps_filtered,
             norm_val_iter,
-            dpct::device_pointer<hd_float>(filtered_series),
+            heimdall::util::device_pointer<hd_float>(filtered_series),
             std::multiplies<hd_float>());
       }
 
@@ -755,16 +756,16 @@ hd_error hd_execute(hd_pipeline pl,
   //if (!too_many_giants)
   //{
     device_vector_wrapper<hd_size> d_giant_labels(giant_count);
-    hd_size *d_giant_labels_ptr = dpct::get_raw_pointer(&d_giant_labels[0]);
+    hd_size *d_giant_labels_ptr = heimdall::util::get_raw_pointer(&d_giant_labels[0]);
 
     RawCandidates d_giants;
-    d_giants.peaks = dpct::get_raw_pointer(&d_giant_peaks[0]);
-    d_giants.inds = dpct::get_raw_pointer(&d_giant_inds[0]);
-    d_giants.begins = dpct::get_raw_pointer(&d_giant_begins[0]);
-    d_giants.ends = dpct::get_raw_pointer(&d_giant_ends[0]);
-    d_giants.filter_inds = dpct::get_raw_pointer(&d_giant_filter_inds[0]);
-    d_giants.dm_inds = dpct::get_raw_pointer(&d_giant_dm_inds[0]);
-    d_giants.members = dpct::get_raw_pointer(&d_giant_members[0]);
+    d_giants.peaks = heimdall::util::get_raw_pointer(&d_giant_peaks[0]);
+    d_giants.inds = heimdall::util::get_raw_pointer(&d_giant_inds[0]);
+    d_giants.begins = heimdall::util::get_raw_pointer(&d_giant_begins[0]);
+    d_giants.ends = heimdall::util::get_raw_pointer(&d_giant_ends[0]);
+    d_giants.filter_inds = heimdall::util::get_raw_pointer(&d_giant_filter_inds[0]);
+    d_giants.dm_inds = heimdall::util::get_raw_pointer(&d_giant_dm_inds[0]);
+    d_giants.members = heimdall::util::get_raw_pointer(&d_giant_members[0]);
 
     hd_size filter_count = get_filter_index(pl->params.boxcar_max) + 1;
 
@@ -802,13 +803,13 @@ hd_error hd_execute(hd_pipeline pl,
     device_vector_wrapper<hd_float> d_group_dms(group_count);
 
     RawCandidates d_groups;
-    d_groups.peaks = dpct::get_raw_pointer(&d_group_peaks[0]);
-    d_groups.inds = dpct::get_raw_pointer(&d_group_inds[0]);
-    d_groups.begins = dpct::get_raw_pointer(&d_group_begins[0]);
-    d_groups.ends = dpct::get_raw_pointer(&d_group_ends[0]);
-    d_groups.filter_inds = dpct::get_raw_pointer(&d_group_filter_inds[0]);
-    d_groups.dm_inds = dpct::get_raw_pointer(&d_group_dm_inds[0]);
-    d_groups.members = dpct::get_raw_pointer(&d_group_members[0]);
+    d_groups.peaks = heimdall::util::get_raw_pointer(&d_group_peaks[0]);
+    d_groups.inds = heimdall::util::get_raw_pointer(&d_group_inds[0]);
+    d_groups.begins = heimdall::util::get_raw_pointer(&d_group_begins[0]);
+    d_groups.ends = heimdall::util::get_raw_pointer(&d_group_ends[0]);
+    d_groups.filter_inds = heimdall::util::get_raw_pointer(&d_group_filter_inds[0]);
+    d_groups.dm_inds = heimdall::util::get_raw_pointer(&d_group_dm_inds[0]);
+    d_groups.members = heimdall::util::get_raw_pointer(&d_group_members[0]);
 
     merge_candidates(giant_count,
                      d_giant_labels_ptr,
@@ -824,23 +825,23 @@ hd_error hd_execute(hd_pipeline pl,
 
     // Device to host transfer of candidates
     // h_group_peaks = d_group_peaks;
-    oneapi_copy(d_group_peaks, h_group_peaks);
+    heimdall::util::copy(d_group_peaks, h_group_peaks);
     // h_group_inds = d_group_inds;
-    oneapi_copy(d_group_inds, h_group_inds);
+    heimdall::util::copy(d_group_inds, h_group_inds);
     // h_group_begins = d_group_begins;
-    oneapi_copy(d_group_begins, h_group_begins);
+    heimdall::util::copy(d_group_begins, h_group_begins);
     // h_group_ends = d_group_ends;
-    oneapi_copy(d_group_ends, h_group_ends);
+    heimdall::util::copy(d_group_ends, h_group_ends);
     // h_group_filter_inds = d_group_filter_inds;
-    oneapi_copy(d_group_filter_inds, h_group_filter_inds);
+    heimdall::util::copy(d_group_filter_inds, h_group_filter_inds);
     // h_group_dm_inds = d_group_dm_inds;
-    oneapi_copy(d_group_dm_inds, h_group_dm_inds);
+    heimdall::util::copy(d_group_dm_inds, h_group_dm_inds);
     // h_group_members = d_group_members;
-    oneapi_copy(d_group_members, h_group_members);
+    heimdall::util::copy(d_group_members, h_group_members);
     // h_group_dms = d_group_dms;
-    oneapi_copy(d_group_dms, h_group_dms);
+    heimdall::util::copy(d_group_dms, h_group_dms);
     //h_group_flags = d_group_flags;
-    //oneapi_copy(d_group_flags, h_group_flags);
+    //heimdall::util::copy(d_group_flags, h_group_flags);
   //}
   
   if( pl->params.verbosity >= 2 ) {

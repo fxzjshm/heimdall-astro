@@ -85,10 +85,10 @@ public:
     //   details of each giant into the d_giant_* arrays using
     //   reduce_by_key and some scatter operations.
 
-    typedef dpct::device_pointer<const hd_float> const_float_ptr;
+    typedef heimdall::util::device_pointer<const hd_float> const_float_ptr;
     // typedef thrust::system::cuda::pointer<const hd_float> const_float_ptr;
-    typedef dpct::device_pointer<hd_float> float_ptr;
-    typedef dpct::device_pointer<hd_size> size_ptr;
+    typedef heimdall::util::device_pointer<hd_float> float_ptr;
+    typedef heimdall::util::device_pointer<hd_size> size_ptr;
 
     /*const_*/float_ptr d_data_begin(const_cast<hd_float*>(d_data));
     /*const_*/float_ptr d_data_end(const_cast<hd_float*>(d_data) + count);

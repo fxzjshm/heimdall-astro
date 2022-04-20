@@ -17,10 +17,10 @@ template <typename T> class MatchedFilterPlan_impl {
 public:
   hd_error prep(const T *d_in, hd_size count, hd_size max_width) {
     m_max_width = max_width;
-    // dpct::device_pointer<const T> d_in_begin(d_in);
-    // dpct::device_pointer<const T> d_in_end(d_in + count);
-    dpct::device_pointer<T> d_in_begin(const_cast<T*>(d_in));
-    dpct::device_pointer<T> d_in_end(const_cast<T*>(d_in + count));
+    // heimdall::util::device_pointer<const T> d_in_begin(d_in);
+    // heimdall::util::device_pointer<const T> d_in_end(d_in + count);
+    heimdall::util::device_pointer<T> d_in_begin(const_cast<T*>(d_in));
+    heimdall::util::device_pointer<T> d_in_end(const_cast<T*>(d_in + count));
 
     // Note: One extra element so that we include the final value
     m_scanned.resize(count + 1, 0);
@@ -38,7 +38,7 @@ public:
     // TODO: Check that prep( ) has been called
     // TODO: Check that width <= m_max_width
 
-    dpct::device_pointer<T> d_out_begin(d_out);
+    heimdall::util::device_pointer<T> d_out_begin(d_out);
 
     hd_size offset = m_max_width / 2;
     hd_size ahead = (filter_width - 1) / 2 + 1; // Divide and round up
@@ -47,7 +47,7 @@ public:
 
     hd_size stride = tscrunch;
 
-    typedef typename dpct::device_vector<T>::iterator Iterator;
+    typedef typename device_vector_wrapper<T>::iterator Iterator;
 
     // Striding through the scanned array has the same effect as tscrunching
     // TODO: Think about this carefully. Does it do exactly what we want?

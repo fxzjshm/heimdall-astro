@@ -226,7 +226,7 @@ hd_error label_candidate_clusters(hd_size            count,
 	 */
     
 
-    dpct::device_pointer<hd_size> d_labels_begin(d_labels);
+    heimdall::util::device_pointer<hd_size> d_labels_begin(d_labels);
     sycl::impl::iota(execution_policy,
                    d_labels_begin, d_labels_begin + count);
 
