@@ -702,9 +702,9 @@ void copy(const InputIterator begin, const InputIterator end, const OutputIterat
     typedef typename std::iterator_traits<InputIterator>::value_type T;
     const T* begin_ptr = &(*begin);
     T* dest_ptr = &(*dest);
-    queue.copy(begin_ptr, dest_ptr, std::distance(begin, end));
+    queue.copy(begin_ptr, dest_ptr, std::distance(begin, end))
     // CHANGE: wait here, as this is not copy_async
-    queue.wait();
+         .wait();
 }
 
 } // namespace dpct
