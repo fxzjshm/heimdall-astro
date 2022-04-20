@@ -128,16 +128,14 @@ public:
         return dpct::device_vector<T, Allocator>::operator=(v);
     }
 
-    void resize(size_type new_size, const T &x = T()) {
+    void resize(size_type new_size, const T &x = T(), sycl::queue& q = dpct::get_default_queue()) {
         size_type old_size = dpct::device_vector<T, Allocator>::size();
         dpct::device_vector<T, Allocator>::resize(new_size, x);
-        // wait here as operations above may be async, otherwise iterators may be invalid if memory is reallocated
-        dpct::get_default_queue().wait();
         if (old_size < new_size) {
+            sycl::sycl_execution_policy<> execution_policy(q);
             ::sycl::impl::fill(execution_policy,
                 dpct::device_vector<T, Allocator>::begin() + old_size, dpct::device_vector<T, Allocator>::begin() + new_size, x
             );
-            execution_policy.get_queue().wait();
         }
     }
 };
