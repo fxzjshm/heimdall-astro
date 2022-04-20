@@ -15,6 +15,8 @@
 #include <boost/iterator/permutation_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 
+#include <hd/permutation_iterator.hpp>
+
 // this example illustrates how to make strided access to a range of values
 // examples:
 // strided_range([0, 1, 2, 3, 4, 5, 6], 1) -> [0, 1, 2, 3, 4, 5, 6]
@@ -42,7 +44,7 @@ public:
 
     typedef typename boost::iterators::counting_iterator<difference_type> CountingIterator;
     typedef typename boost::iterators::transform_iterator<stride_functor, CountingIterator> TransformIterator;
-    typedef typename boost::iterators::permutation_iterator<Iterator, TransformIterator> PermutationIterator;
+    typedef typename heimdall::util::permutation_iterator<Iterator, TransformIterator> PermutationIterator;
 
     // type of the strided_range iterator
     typedef PermutationIterator iterator;

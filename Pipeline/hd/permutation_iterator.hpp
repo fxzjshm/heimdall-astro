@@ -3,6 +3,9 @@
 #include <type_traits>
 #include <iterator>
 
+namespace heimdall {
+namespace util {
+
 /**
  *  @brief  Permutation iterator. Modfied from ostream_iterator and ZipIter
 */
@@ -39,7 +42,7 @@ class permutation_iterator {
     permutation_iterator operator++(int) {permutation_iterator tmp(*this); operator++(); return tmp;}
     permutation_iterator operator--(int) {permutation_iterator tmp(*this); operator--(); return tmp;}
 
-    difference_type operator-(const permutation_iterator& rhs) const {return std::distance(index_iterator, rhs.index_iterator);}
+    difference_type operator-(const permutation_iterator& rhs) const {return index_iterator - rhs.index_iterator;}
     permutation_iterator operator+(const difference_type d) const {permutation_iterator tmp(*this); tmp += d; return tmp;}
     permutation_iterator operator-(const difference_type d) const {permutation_iterator tmp(*this); tmp -= d; return tmp;}
     inline friend permutation_iterator operator+(const difference_type d, const permutation_iterator& z) {return z+d;}
@@ -54,3 +57,6 @@ class permutation_iterator {
     ElementIterator element_iterator;
     IndexIterator index_iterator;
 };
+
+} // namespace heimdall
+} // namespace util

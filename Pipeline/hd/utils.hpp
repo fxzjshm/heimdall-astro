@@ -225,6 +225,10 @@ template <typename ...T> struct is_tuple<std::tuple<T...>>: std::true_type {};
 // patch for foreign iterators
 template <typename T>
 struct sycl::is_device_copyable<boost::iterators::counting_iterator<T>> : std::true_type {};
+
 template <class ElementIterator, class IndexIterator>
 struct sycl::is_device_copyable<boost::iterators::permutation_iterator<ElementIterator, IndexIterator>, std::enable_if_t<!std::is_trivially_copyable<boost::iterators::permutation_iterator<ElementIterator, IndexIterator>>::value>> : std::true_type {};
+
+template <class ElementIterator, class IndexIterator>
+struct sycl::is_device_copyable<heimdall::util::permutation_iterator<ElementIterator, IndexIterator>> : std::true_type {};
 #endif
