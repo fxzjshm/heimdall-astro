@@ -21,6 +21,7 @@ struct hd_params {
   key_t    dada_id;        // Identifier for the psrdada shared memory buffer
   const char * sigproc_file;  // Name of sigproc filterbank file
   bool     yield_cpu;      // Yield/spin the CPU to in/decrease GPU latency
+  hd_size  ncpus;          // No. CPU cores to use
   hd_size  nsamps_gulp;    // No. samples to gulp into memory and process at once
   hd_size  dm_gulp_size;   // No. DMs to compute at once
   // Normalisation parameters

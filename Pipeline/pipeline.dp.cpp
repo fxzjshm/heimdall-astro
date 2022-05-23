@@ -46,10 +46,11 @@ using std::endl;
 #include "hd/stopwatch.h"         // For benchmarking
 //#include "hd/write_time_series.h" // For debugging
 #include "hd/utils.hpp"
+#include "hd/ThreadPool.h"
 
 #include <dedisp.h>
 
-#define HD_BENCHMARK
+//#define HD_BENCHMARK
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
@@ -82,8 +83,9 @@ struct hd_pipeline_t {
   // Memory buffers used during pipeline execution
   std::vector<hd_byte>    h_clean_filterbank;
   host_vector<hd_byte>    h_dm_series;
-  device_vector<hd_float> d_time_series;
-  device_vector<hd_float> d_filtered_series;
+  // Should be one every thread, not global
+  //device_vector<hd_float> d_time_series;
+  //device_vector<hd_float> d_filtered_series;
 };
 
 hd_error allocate_gpu(const hd_params params) {
@@ -412,8 +414,8 @@ hd_error hd_execute(hd_pipeline pl,
   start_timer(memory_timer);
   
   pl->h_dm_series.resize(series_stride * pl->params.dm_nbits/8 * dm_count);
-  pl->d_time_series.resize(series_stride);
-  pl->d_filtered_series.resize(series_stride, 0);
+  //pl->d_time_series.resize(series_stride);
+  //pl->d_filtered_series.resize(series_stride, 0);
   
   stop_timer(memory_timer);
   
@@ -422,13 +424,13 @@ hd_error hd_execute(hd_pipeline pl,
   MatchedFilterPlan<hd_float> matched_filter_plan;
   GiantFinder                 giant_finder;
 
-  device_vector_wrapper<hd_float> d_giant_peaks;
-  device_vector_wrapper<hd_size> d_giant_inds;
-  device_vector_wrapper<hd_size> d_giant_begins;
-  device_vector_wrapper<hd_size> d_giant_ends;
-  device_vector_wrapper<hd_size> d_giant_filter_inds;
-  device_vector_wrapper<hd_size> d_giant_dm_inds;
-  device_vector_wrapper<hd_size> d_giant_members;
+  device_vector_wrapper<hd_float> d_all_giant_peaks;
+  device_vector_wrapper<hd_size> d_all_giant_inds;
+  device_vector_wrapper<hd_size> d_all_giant_begins;
+  device_vector_wrapper<hd_size> d_all_giant_ends;
+  device_vector_wrapper<hd_size> d_all_giant_filter_inds;
+  device_vector_wrapper<hd_size> d_all_giant_dm_inds;
+  device_vector_wrapper<hd_size> d_all_giant_members;
 
   typedef heimdall::util::device_pointer<hd_float> dev_float_ptr;
   typedef heimdall::util::device_pointer<hd_size> dev_size_ptr;
@@ -472,15 +474,49 @@ hd_error hd_execute(hd_pipeline pl,
   
   bool too_many_giants = false;
   
+  {
+  ThreadPool thread_pool(pl->params.ncpus);
+  std::mutex m_mutex;
   // For each DM
   for( hd_size dm_idx=0; dm_idx<dm_count; ++dm_idx ) {
+    auto inner_function = [dm_idx,
+        &scrunch_factors, &nsamps_computed, &too_many_giants, &series_stride, &dm_list, &nsamps, &dm_count, &m_mutex, &pl,
+        &d_all_giant_peaks, &d_all_giant_inds, &d_all_giant_begins, &d_all_giant_ends, &d_all_giant_filter_inds, &d_all_giant_dm_inds, &d_all_giant_members,
+        &beam, &write_dm, &first_idx,
+        &copy_timer, &baseline_timer, &normalise_timer, &filter_timer, &giants_timer]() -> hd_error {
+    hd_error error = HD_NO_ERROR;
+    thread_local RemoveBaselinePlan          baseline_remover;
+    thread_local GetRMSPlan                  rms_getter;
+    thread_local MatchedFilterPlan<hd_float> matched_filter_plan;
+    thread_local GiantFinder                 giant_finder;
+    thread_local device_vector_wrapper<hd_float> d_giant_peaks;
+    thread_local device_vector_wrapper<hd_size>  d_giant_inds;
+    thread_local device_vector_wrapper<hd_size>  d_giant_begins;
+    thread_local device_vector_wrapper<hd_size>  d_giant_ends;
+    thread_local device_vector_wrapper<hd_size>  d_giant_filter_inds;
+    thread_local device_vector_wrapper<hd_size>  d_giant_dm_inds;
+    thread_local device_vector_wrapper<hd_size>  d_giant_members;
+    thread_local device_vector_wrapper<hd_float> d_time_series;
+    thread_local device_vector_wrapper<hd_float> d_filtered_series;
+    d_giant_peaks.clear();
+    d_giant_inds.clear();
+    d_giant_begins.clear();
+    d_giant_ends.clear();
+    d_giant_filter_inds.clear();
+    d_giant_dm_inds.clear();
+    d_giant_members.clear();
+    d_time_series.resize(series_stride);
+    d_filtered_series.resize(series_stride);
+    //sycl::sycl_execution_policy<> local_execution_policy(sycl::queue(execution_policy.get_queue()));
+    sycl::impl::fill(execution_policy, d_filtered_series.begin(), d_filtered_series.end(), 0);
+
     hd_size  cur_dm_scrunch = scrunch_factors[dm_idx];
     hd_size  cur_nsamps  = nsamps_computed / cur_dm_scrunch;
     hd_float cur_dt      = pl->params.dt * cur_dm_scrunch;
     
     // Bail if the candidate rate is too high
     if( too_many_giants ) {
-      break;
+      return HD_TOO_MANY_EVENTS;
     }
     
     if( pl->params.verbosity >= 4 ) {
@@ -493,31 +529,31 @@ hd_error hd_execute(hd_pipeline pl,
       cout << "\tBaselining and normalising each beam..." << endl;
     }
 
-    hd_float *time_series = heimdall::util::get_raw_pointer(&pl->d_time_series[0]);
+    hd_float *time_series = heimdall::util::get_raw_pointer(&d_time_series[0]);
 
     // Copy the time series to the device and convert to floats
     hd_size offset = dm_idx * series_stride * pl->params.dm_nbits/8;
     start_timer(copy_timer);
-    execution_policy.get_queue().prefetch(&pl->h_dm_series[offset], cur_nsamps * pl->params.dm_nbits / 8);
+    execution_policy.get_queue().prefetch(&pl->h_dm_series[offset], cur_nsamps * pl->params.dm_nbits / 8).wait();
     switch( pl->params.dm_nbits ) {
     case 8:
       sycl::impl::copy(execution_policy,
                 (unsigned char *)&pl->h_dm_series[offset],
                 (unsigned char *)&pl->h_dm_series[offset] + cur_nsamps,
-                pl->d_time_series.begin());
+                d_time_series.begin());
       break;
     case 16:
       sycl::impl::copy(execution_policy,
                 (unsigned short *)&pl->h_dm_series[offset],
                 (unsigned short *)&pl->h_dm_series[offset] + cur_nsamps,
-                pl->d_time_series.begin());
+                d_time_series.begin());
       break;
     case 32:
       // Note: 32-bit implies float, not unsigned int
       sycl::impl::copy(execution_policy,
                 (float *)&pl->h_dm_series[offset],
                 (float *)&pl->h_dm_series[offset] + cur_nsamps,
-                pl->d_time_series.begin());
+                d_time_series.begin());
       break;
     default:
       return HD_INVALID_NBITS;
@@ -552,9 +588,9 @@ hd_error hd_execute(hd_pipeline pl,
     hd_float rms = rms_getter.exec(time_series, cur_nsamps);
     sycl::impl::transform(
         execution_policy,
-        pl->d_time_series.begin(), pl->d_time_series.end(),
+        d_time_series.begin(), d_time_series.end(),
         dpct::make_constant_iterator(hd_float(1.0) / rms),
-        pl->d_time_series.begin(),
+        d_time_series.begin(),
         std::multiplies<hd_float>());
     stop_timer(normalise_timer);
     
@@ -581,7 +617,7 @@ hd_error hd_execute(hd_pipeline pl,
     stop_timer(filter_timer);
     // --------------------------
 
-    hd_float *filtered_series = heimdall::util::get_raw_pointer(&pl->d_filtered_series[0]);
+    hd_float *filtered_series = heimdall::util::get_raw_pointer(&d_filtered_series[0]);
 
     // Note: Filtering is done using a combination of tscrunching and
     //         'proper' boxcar convolution. The parameter min_tscrunch_width
@@ -735,9 +771,34 @@ hd_error hd_execute(hd_pipeline pl,
       }
       
     } // End of filter width loop
+    // gather giant info
+    {
+      std::lock_guard lock(m_mutex);
+      auto old_size = d_all_giant_peaks.size();
+      auto new_size = old_size + d_giant_peaks.size();
+      d_all_giant_peaks.resize(new_size);
+      d_all_giant_inds.resize(new_size);
+      d_all_giant_begins.resize(new_size);
+      d_all_giant_ends.resize(new_size);
+      d_all_giant_filter_inds.resize(new_size);
+      d_all_giant_dm_inds.resize(new_size);
+      d_all_giant_members.resize(new_size);
+      sycl::impl::copy(execution_policy, d_giant_peaks.begin(), d_giant_peaks.end(), d_all_giant_peaks.begin() + old_size);
+      sycl::impl::copy(execution_policy, d_giant_inds.begin(), d_giant_inds.end(), d_all_giant_inds.begin() + old_size);
+      sycl::impl::copy(execution_policy, d_giant_begins.begin(), d_giant_begins.end(), d_all_giant_begins.begin() + old_size);
+      sycl::impl::copy(execution_policy, d_giant_ends.begin(), d_giant_ends.end(), d_all_giant_ends.begin() + old_size);
+      sycl::impl::copy(execution_policy, d_giant_filter_inds.begin(), d_giant_filter_inds.end(), d_all_giant_filter_inds.begin() + old_size);
+      sycl::impl::copy(execution_policy, d_giant_dm_inds.begin(), d_giant_dm_inds.end(), d_all_giant_dm_inds.begin() + old_size);
+      sycl::impl::copy(execution_policy, d_giant_members.begin(), d_giant_members.end(), d_all_giant_members.begin() + old_size);
+      //execution_policy.get_queue().wait_and_throw();
+    }
+    return HD_NO_ERROR;
+  };
+  thread_pool.enqueue(inner_function);
   } // End of DM loop
+  }
 
-  hd_size giant_count = d_giant_peaks.size();
+  hd_size giant_count = d_all_giant_peaks.size();
   if( pl->params.verbosity >= 2 ) {
     cout << "Giant count = " << giant_count << endl;
   }
@@ -759,13 +820,13 @@ hd_error hd_execute(hd_pipeline pl,
     hd_size *d_giant_labels_ptr = heimdall::util::get_raw_pointer(&d_giant_labels[0]);
 
     RawCandidates d_giants;
-    d_giants.peaks = heimdall::util::get_raw_pointer(&d_giant_peaks[0]);
-    d_giants.inds = heimdall::util::get_raw_pointer(&d_giant_inds[0]);
-    d_giants.begins = heimdall::util::get_raw_pointer(&d_giant_begins[0]);
-    d_giants.ends = heimdall::util::get_raw_pointer(&d_giant_ends[0]);
-    d_giants.filter_inds = heimdall::util::get_raw_pointer(&d_giant_filter_inds[0]);
-    d_giants.dm_inds = heimdall::util::get_raw_pointer(&d_giant_dm_inds[0]);
-    d_giants.members = heimdall::util::get_raw_pointer(&d_giant_members[0]);
+    d_giants.peaks = heimdall::util::get_raw_pointer(&d_all_giant_peaks[0]);
+    d_giants.inds = heimdall::util::get_raw_pointer(&d_all_giant_inds[0]);
+    d_giants.begins = heimdall::util::get_raw_pointer(&d_all_giant_begins[0]);
+    d_giants.ends = heimdall::util::get_raw_pointer(&d_all_giant_ends[0]);
+    d_giants.filter_inds = heimdall::util::get_raw_pointer(&d_all_giant_filter_inds[0]);
+    d_giants.dm_inds = heimdall::util::get_raw_pointer(&d_all_giant_dm_inds[0]);
+    d_giants.members = heimdall::util::get_raw_pointer(&d_all_giant_members[0]);
 
     hd_size filter_count = get_filter_index(pl->params.boxcar_max) + 1;
 

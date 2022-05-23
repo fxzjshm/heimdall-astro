@@ -15,6 +15,7 @@ void hd_set_default_params(hd_params* params) {
 #endif
 	params->sigproc_file    = NULL;
 	params->yield_cpu       = false;
+	params->ncpus           = 1;
 	params->nsamps_gulp     = 262144;//131072; // TODO: Check that this is good
 	// TODO: This is no longer being used
 	params->dm_gulp_size    = 2048;//256;    // TODO: Check that this is good

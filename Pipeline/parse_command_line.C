@@ -52,6 +52,9 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
     else if( argv[i] == string("-yield_cpu") ) {
       params->yield_cpu = true;
     }
+    else if( argv[i] == string("-ncpus") ) {
+      params->ncpus = atoi(argv[++i]);
+    }
     else if( argv[i] == string("-nsamps_gulp") ) {
       params->nsamps_gulp = atoi(argv[++i]);
     }
@@ -175,6 +178,7 @@ void hd_print_usage()
   cout << "    -k  key                  use PSRDADA hexidecimal key" << endl;
   cout << "    -f  filename             process specified SIGPROC filterbank file" << endl;
   cout << "    -vVgG                    increase verbosity level" << endl;
+  cout << "    -ncpus ncpus             number of CPU cores to use (experimental)" << endl;
   cout << "    -yield_cpu               yield CPU during GPU operations" << endl;
   cout << "    -gpu_id ID               run on specified GPU" << endl;
   cout << "    -nsamps_gulp num         number of samples to be read at a time [" << p.nsamps_gulp << "]" << endl;
