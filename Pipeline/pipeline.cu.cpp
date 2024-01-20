@@ -49,7 +49,7 @@ using thrust::device_vector;
 
 #ifdef HD_BENCHMARK
   void start_timer(Stopwatch& timer) { timer.start(); }
-  void stop_timer(Stopwatch& timer) { cudaDeviceSynchronize(); timer.stop(); }
+  void stop_timer(Stopwatch& timer) { hipDeviceSynchronize(); timer.stop(); }
 #else
   void start_timer(Stopwatch& timer) { }
   void stop_timer(Stopwatch& timer) { }
@@ -74,16 +74,16 @@ struct hd_pipeline_t {
 hd_error allocate_gpu(const hd_pipeline pl) {
   // TODO: This is just a simple proc-->GPU heuristic to get us started
   int gpu_count;
-  cudaGetDeviceCount(&gpu_count);
+  hipGetDeviceCount(&gpu_count);
   //int proc_idx;
   //MPI_Comm comm = pl->communicator;
   //MPI_Comm_rank(comm, &proc_idx);
   int proc_idx = pl->params.beam;
   int gpu_idx = pl->params.gpu_id;
   
-  cudaError_t cerror = cudaSetDevice(gpu_idx);
-  if( cerror != cudaSuccess ) {
-    cerr << "Could not setCudaDevice to " << gpu_idx << ": " << cudaGetErrorString(cerror) <<  endl;
+  hipError_t cerror = hipSetDevice(gpu_idx);
+  if( cerror != hipSuccess ) {
+    cerr << "Could not setCudaDevice to " << gpu_idx << ": " << hipGetErrorString(cerror) <<  endl;
     return throw_cuda_error(cerror);
   }
   
@@ -95,8 +95,8 @@ hd_error allocate_gpu(const hd_pipeline pl) {
     if( pl->params.verbosity >= 2 ) {
       cout << "\tProcess " << proc_idx << " setting CPU to spin" << endl;
     }
-    cerror = cudaSetDeviceFlags(cudaDeviceScheduleSpin);
-    if( cerror != cudaSuccess ) {
+    cerror = hipSetDeviceFlags(hipDeviceScheduleSpin);
+    if( cerror != hipSuccess ) {
       return throw_cuda_error(cerror);
     }
   }
@@ -107,9 +107,9 @@ hd_error allocate_gpu(const hd_pipeline pl) {
     // Note: This Yield flag doesn't seem to work properly.
     //   The BlockingSync flag does the job, although it may interfere
     //     with GPU/CPU overlapping (not currently used).
-    //cerror = cudaSetDeviceFlags(cudaDeviceScheduleYield);
-    cerror = cudaSetDeviceFlags(cudaDeviceBlockingSync);
-    if( cerror != cudaSuccess ) {
+    //cerror = hipSetDeviceFlags(hipDeviceScheduleYield);
+    cerror = hipSetDeviceFlags(hipDeviceScheduleBlockingSync);
+    if( cerror != hipSuccess ) {
       return throw_cuda_error(cerror);
     }
   }
@@ -122,7 +122,7 @@ unsigned int get_filter_index(unsigned int filter_width) {
   unsigned int v = filter_width;
   static const unsigned int b[] = {0xAAAAAAAA, 0xCCCCCCCC, 0xF0F0F0F0, 
                                    0xFF00FF00, 0xFFFF0000};
-  register unsigned int r = (v & b[0]) != 0;
+  unsigned int r = (v & b[0]) != 0;
   for( int i=4; i>0; --i) {
     r |= ((v & b[i]) != 0) << i;
   }

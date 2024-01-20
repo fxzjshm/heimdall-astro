@@ -360,7 +360,7 @@ hd_error label_candidate_clusters(hd_size            count,
 	//         in overall speed.
 
 	unsigned int* d_counter_address;
-	cudaGetSymbolAddress((void**)&d_counter_address, d_counter);
+	hipGetSymbolAddress((void**)&d_counter_address, d_counter);
 	thrust::device_ptr<unsigned int> d_counter_ptr(d_counter_address);
 	*d_counter_ptr = 0;
   

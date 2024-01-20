@@ -129,7 +129,7 @@ public:
     }
   
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    hipDeviceSynchronize();
     timer.stop();
     std::cout << "count_if time:           " << timer.getTime() << " s" << std::endl;
     timer.reset();
@@ -141,7 +141,7 @@ public:
     d_giant_data_inds.resize(giant_data_count);
   
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    hipDeviceSynchronize();
     timer.stop();
     std::cout << "giant_data resize time:  " << timer.getTime() << " s" << std::endl;
     timer.reset();
@@ -164,7 +164,7 @@ public:
                                      thrust::retag<my_tag>(d_giant_data_inds.begin())));
   
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    hipDeviceSynchronize();
     timer.stop();
     std::cout << "giant_data copy_if time: " << timer.getTime() << " s" << std::endl;
     timer.reset();
@@ -208,7 +208,7 @@ public:
     //total_giant_count = giant_count;
     
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    hipDeviceSynchronize();
     timer.stop();
     std::cout << "giant segments time:     " << timer.getTime() << " s" << std::endl;
     timer.reset();
@@ -228,7 +228,7 @@ public:
     size_ptr  new_giant_ends_begin(&d_giant_ends[new_giants_offset]);
   
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    hipDeviceSynchronize();
     timer.stop();
     std::cout << "giants resize time:      " << timer.getTime() << " s" << std::endl;
     timer.reset();
@@ -252,7 +252,7 @@ public:
                                              thrust::retag<my_tag>(new_giant_inds_begin)));
   
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    hipDeviceSynchronize();
     timer.stop();
     std::cout << "reduce_by_key time:      " << timer.getTime() << " s" << std::endl;
     timer.reset();
@@ -285,7 +285,7 @@ public:
   
   
 #ifdef PRINT_BENCHMARKS
-    cudaThreadSynchronize();
+    hipDeviceSynchronize();
     timer.stop();
     std::cout << "begin/end copy_if time:  " << timer.getTime() << " s" << std::endl;
     timer.reset();

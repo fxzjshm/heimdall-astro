@@ -1,1 +1,12 @@
+Migrated to ROCm/HIP.
+
+Example configure command:
+```
+./configure --with-dedisp-dir=${HOME}/workspace/dedisp-hip --with-thrust-dir=/opt/rocm/include CXX="/opt/rocm/bin/hipcc" CXXFLAGS="-fPIC" LDFLAGS="-lstdc++ -L${HOME}/workspace/dedisp-hip/lib -ldedisp"
+```
+
+Original Wiki: https://sourceforge.net/p/heimdall-astro/wiki/Home/
+
+---
+
 Readme file

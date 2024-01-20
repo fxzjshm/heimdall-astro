@@ -7,13 +7,14 @@
 
 #pragma once
 
+#include "hd/error.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include "hd/types.h"
 #include "hd/params.h"
-#include "hd/error.h"
 
 hd_error hd_create_pipeline(hd_pipeline* pipeline, hd_params params);
 hd_error hd_execute(hd_pipeline pipeline,

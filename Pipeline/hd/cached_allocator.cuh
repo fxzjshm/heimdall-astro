@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include <thrust/system/cuda/vector.h>
+#include <thrust/system/hip/vector.h>
 
 #include <map>
 #include <stdexcept>
@@ -52,7 +52,7 @@ struct cached_allocator
 	      //std::cout << "cached_allocator::allocator(): no free block found; calling cuda::malloc" << std::endl;
 
         // allocate memory and convert cuda::pointer to raw pointer
-        result = thrust::system::cuda::malloc(num_bytes).get();
+        result = thrust::system::hip::malloc(num_bytes).get();
       }
       catch(std::runtime_error &e)
       {
@@ -87,7 +87,7 @@ struct cached_allocator
         ++i)
     {
       // transform the pointer to cuda::pointer before calling cuda::free
-      thrust::system::cuda::free(thrust::system::cuda::pointer<void>(i->second));
+      thrust::system::hip::free(thrust::system::hip::pointer<void>(i->second));
     }
 
     for(allocated_blocks_type::iterator i = allocated_blocks.begin();
@@ -95,7 +95,7 @@ struct cached_allocator
         ++i)
     {
       // transform the pointer to cuda::pointer before calling cuda::free
-      thrust::system::cuda::free(thrust::system::cuda::pointer<void>(i->first));
+      thrust::system::hip::free(thrust::system::hip::pointer<void>(i->first));
     }
   }
 
@@ -110,7 +110,7 @@ struct cached_allocator
 extern cached_allocator g_allocator;
 
 // Tag for custom memory allocator in Thrust calls
-struct my_tag : thrust::system::cuda::tag {};
+struct my_tag : thrust::system::hip::tag {};
 
 // overload get_temporary_buffer on my_tag
 // its job is to forward allocation requests to g_allocator

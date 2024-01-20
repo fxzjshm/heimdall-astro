@@ -90,12 +90,12 @@ void write_device_time_series(const float* data,
                               string      filename)
 {
 	std::vector<float> h_data(nsamps);
-	cudaError_t error = cudaMemcpy(&h_data[0], data,
+	hipError_t error = hipMemcpy(&h_data[0], data,
 	                               nsamps*sizeof(float),
-								   cudaMemcpyDeviceToHost);
-	if( error != cudaSuccess ) {
-		throw std::runtime_error(std::string("write_time_series: cudaMemcpy failed: ") +
-								 cudaGetErrorString(error));
+								   hipMemcpyDeviceToHost);
+	if( error != hipSuccess ) {
+		throw std::runtime_error(std::string("write_time_series: hipMemcpy failed: ") +
+								 hipGetErrorString(error));
 	}
 	write_host_time_series(&h_data[0], nsamps, dt, filename);
 }
@@ -144,12 +144,12 @@ void write_device_time_series(const unsigned int* data,
 {
 	size_t nsamps_words = nsamps * nbits/(sizeof(unsigned int)*8);
 	std::vector<unsigned int> h_data(nsamps_words);
-	cudaError_t error = cudaMemcpy(&h_data[0], data,
+	hipError_t error = hipMemcpy(&h_data[0], data,
 	                               nsamps_words*sizeof(unsigned int),
-								   cudaMemcpyDeviceToHost);
-	if( error != cudaSuccess ) {
-		throw std::runtime_error(std::string("write_time_series: cudaMemcpy failed: ") +
-								 cudaGetErrorString(error));
+								   hipMemcpyDeviceToHost);
+	if( error != hipSuccess ) {
+		throw std::runtime_error(std::string("write_time_series: hipMemcpy failed: ") +
+								 hipGetErrorString(error));
 	}
 	write_host_time_series(&h_data[0], nsamps, nbits, dt, filename);
 }

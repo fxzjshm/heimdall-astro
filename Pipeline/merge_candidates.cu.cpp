@@ -14,6 +14,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/sequence.h>
 
 typedef thrust::tuple<hd_float,
                       hd_size,hd_size,hd_size,
